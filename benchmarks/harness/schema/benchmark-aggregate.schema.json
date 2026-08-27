@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Oche Phase 0.5 HTTP benchmark aggregate",
+  "title": "Oche HTTP benchmark aggregate",
   "type": "object",
   "required": [
     "schemaVersion",

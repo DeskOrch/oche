@@ -15,6 +15,8 @@ final class BenchmarkResult {
     required this.warmupSeconds,
     required this.loadGenerator,
     required this.startupMs,
+    required this.environment,
+    this.schedule,
     this.requestsPerSecond,
     this.successRate,
     this.p50Ms,
@@ -38,6 +40,8 @@ final class BenchmarkResult {
   final int warmupSeconds;
   final String loadGenerator;
   final double startupMs;
+  final Map<String, Object> environment;
+  final Map<String, Object>? schedule;
   final double? requestsPerSecond;
   final double? successRate;
   final double? p50Ms;
@@ -63,6 +67,8 @@ final class BenchmarkResult {
       'warmupSeconds': warmupSeconds,
       'loadGenerator': loadGenerator,
       'startupMs': startupMs,
+      'environment': environment,
+      'schedule': ?schedule,
     };
 
     if (requestsPerSecond case final value?) {

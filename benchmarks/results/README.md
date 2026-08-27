@@ -1,108 +1,115 @@
-# Local Phase 0.5 measurements
+# Local benchmark measurements
 
-These measurements verify the Phase 0.5 AOT artifacts, process harness,
-aggregation, and static route-scaling runner. They do not include HTTP load
-results and are not sufficient to select Oche's HTTP foundation.
+These are development-host measurements, not production performance promises.
+When available locally or as workflow artifacts, generated JSON is the
+authoritative evidence. The tracked tables summarize medians and clearly
+identify where values are averaged across endpoints.
 
-## Environment
+## Phase 0.6 balanced Windows AOT validation
+
+Local evidence set (generated JSON is intentionally ignored by Git):
+
+- `phase06-windows-balanced/2026-08-27T20-34-49-497561Z-aggregate.json`
+- `phase06-windows-balanced/`: 135 raw trial files, five per each of 27
+  implementation/endpoint/concurrency groups
+
+### Environment and method
 
 - Date: 2026-08-27
-- Dart SDK: 3.13.1 stable, Windows x64
-- OS: Microsoft Windows NT 10.0.26200.0, 64-bit
-- CPU identifier: Intel64 Family 6 Model 79; 28 logical processors visible
-- Server mode: Dart native/AOT, one isolate, loopback `127.0.0.1`
-- Process trials: five per implementation and endpoint
-- Process configuration: concurrency 1 recorded, no warmup, no load generator
-- Route scaling: native/AOT, five trials, 20,000 warmup lookups and 200,000
-  measured lookups per strategy/route count
+- Environment type: `native-windows`
+- OS: Windows 11 Pro 10.0 build 26200, Windows x64
+- CPU: Intel Xeon E5-2680 v4 at 2.40 GHz, 28 logical CPUs visible
+- Dart: 3.13.1 stable, AOT native executables, one isolate
+- Load generator: `oha` 1.16.0 on loopback `127.0.0.1`
+- Endpoints: `/plaintext`, `/json`, `/users/42`
+- Concurrency: 10, 100, 500
+- Per trial: five seconds warmup, 30 seconds measured, two seconds cooldown
+- Repetitions: five per group
 
-The local raw HTTP trial files, aggregate file, and route-scaling JSON are kept
-under this directory in the working tree and ignored by Git by default. The
-tracked schemas and commands make them reproducible without presenting local
-development-host results as a permanent performance promise.
+Implementation and endpoint order follow the same deterministic six-permutation
+cycle. The five-iteration run puts each item first, middle, and last at least
+once. Raw results record both full orders and positions, iteration, sequence,
+suite run ID, cooldown, and system metadata.
 
-## Native executable size
+### Absolute results
 
-| Implementation | Bytes | MiB |
-| --- | ---: | ---: |
-| raw `dart:io` | 6,505,472 | 6.204 |
-| Relic | 8,167,424 | 7.789 |
-| Oche static | 6,470,656 | 6.171 |
+The table uses the mean of the three endpoint medians at each concurrency. The
+aggregate keeps each endpoint separate and includes sample count, median,
+minimum, maximum, and population standard deviation.
 
-Relic is 1,696,768 bytes larger than the static spike in this build. The static
-spike and raw reference differ by only 34,816 bytes; that small difference
-should not be treated as an optimization guarantee.
+| Concurrency | Implementation | Requests/s | p50 ms | p95 ms | p99 ms | Idle RSS MiB | Peak RSS MiB | Server CPU |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | raw `dart:io` | 5,865.6 | 1.664 | 1.951 | 2.194 | 14.581 | 18.622 | 124.6% |
+| 10 | Oche static | 5,900.4 | 1.661 | 1.945 | 2.205 | 14.572 | 18.479 | 124.8% |
+| 10 | Relic | 4,756.5 | 2.028 | 2.720 | 3.097 | 17.065 | 53.092 | 125.6% |
+| 100 | raw `dart:io` | 5,846.3 | 16.852 | 18.736 | 20.398 | 14.583 | 55.391 | 121.8% |
+| 100 | Oche static | 5,866.9 | 16.740 | 18.586 | 20.506 | 14.572 | 55.065 | 122.5% |
+| 100 | Relic | 4,919.6 | 20.131 | 22.817 | 24.776 | 17.074 | 90.436 | 124.9% |
+| 500 | raw `dart:io` | 6,244.3 | 82.863 | 93.858 | 99.520 | 14.581 | 84.757 | 124.9% |
+| 500 | Oche static | 6,273.2 | 82.482 | 93.108 | 97.053 | 14.569 | 84.254 | 124.0% |
+| 500 | Relic | 4,515.9 | 110.696 | 117.608 | 123.998 | 17.070 | 122.948 | 126.4% |
 
-## Startup and idle RSS
+`Server CPU` is whole-process CPU-time delta divided by wall time. One fully
+busy logical CPU is 100%; runtime helper threads can make a single-isolate
+server process exceed 100%.
 
-Values below are median `[minimum, maximum]` across five new-process trials.
-Startup ends only after the selected endpoint returns HTTP 200.
+### Relative to raw `dart:io`
 
-| Implementation | Endpoint | Startup ms | Idle RSS MiB |
-| --- | --- | ---: | ---: |
-| raw `dart:io` | `/plaintext` | 359.306 `[353.956, 669.158]` | 14.590 `[14.566, 15.039]` |
-| raw `dart:io` | `/json` | 356.533 `[349.151, 466.305]` | 14.586 `[14.582, 14.590]` |
-| raw `dart:io` | `/users/42` | 352.651 `[345.495, 376.990]` | 14.578 `[14.566, 14.602]` |
-| Relic | `/plaintext` | 364.566 `[353.382, 644.865]` | 17.066 `[17.055, 17.074]` |
-| Relic | `/json` | 349.556 `[349.075, 356.095]` | 17.070 `[17.059, 17.082]` |
-| Relic | `/users/42` | 355.344 `[344.682, 364.820]` | 17.082 `[17.055, 17.082]` |
-| Oche static | `/plaintext` | 358.524 `[349.930, 665.263]` | 14.566 `[14.563, 15.063]` |
-| Oche static | `/json` | 352.648 `[347.728, 355.815]` | 14.566 `[14.559, 14.594]` |
-| Oche static | `/users/42` | 351.329 `[347.698, 358.100]` | 14.570 `[14.555, 14.586]` |
+Each range spans the three endpoint-level median ratios. Higher throughput is
+better; lower p99 and RSS are better.
 
-Startup outliers and overlapping ranges leave no meaningful startup ranking.
-The static spike's idle RSS tracks raw `dart:io`; Relic uses about 2.5 MiB more
-in these process snapshots.
+| Concurrency | Implementation | Requests/s | p99 | Idle RSS | Peak RSS |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 10 | Oche static | 99.53-101.77% | 94.37-106.15% | 99.89-100.00% | 97.57-100.23% |
+| 10 | Relic | 79.12-82.26% | 135.99-150.37% | 117.01-117.07% | 281.34-290.47% |
+| 100 | Oche static | 99.34-102.13% | 96.95-105.04% | 99.87-100.00% | 99.07-99.82% |
+| 100 | Relic | 83.14-85.91% | 108.72-130.73% | 117.01-117.15% | 162.96-163.48% |
+| 500 | Oche static | 100.26-100.59% | 95.47-98.73% | 99.87-99.95% | 98.15-100.75% |
+| 500 | Relic | 71.76-72.79% | 123.39-126.86% | 117.01-117.15% | 143.49-145.97% |
 
-## HTTP load metrics
+Native executable size was 6.204 MiB for raw `dart:io`, 6.171 MiB for Oche
+static, and 7.789 MiB for Relic. Relative to raw, where lower is better, that is
+100.00%, 99.46%, and 125.55%. Startup medians overlapped at about 308-327 ms and
+do not establish a ranking.
 
-`oha`, `wrk`, and `wrk2` were unavailable. The following were not measured and
-are absent—not zero—in raw and aggregate JSON:
+### Interpretation and irregularities
 
-- requests per second;
-- p50, p95, and p99 latency;
-- peak RSS under sustained load;
-- server CPU utilization under sustained load;
-- allocation behavior under sustained load.
+Balancing reproduced the prior fixed-order result. Oche static still meets the
+95%-of-raw criterion for every endpoint and concurrency. Relic remains
+14.09-20.88% behind raw at concurrency 10/100 and 27.21-28.24% behind at 500,
+with materially higher p99, idle RSS, peak RSS, and binary size.
 
-Install `oha` on this Windows developer environment with:
+Twenty of the 45 concurrency-500 trials reported tiny non-success fractions.
+The worst was approximately 20 of 182,865 requests, or 99.989% success. Relic
+`/users/42` at concurrency 100 also had one p99 outlier of 101.689 ms; the other
+four trials were 24.031-32.642 ms, leaving the group median at 24.379 ms. The
+generated aggregate retains both events.
 
-```powershell
-winget install hatoo.oha
-```
+The data comes from one loopback developer host, where server and load generator
+contend for the same machine. It supports the relative Windows ranking but not a
+universal absolute throughput claim.
 
-Then build the AOT binaries and run the documented five-iteration suite.
+## Linux status
 
-## Static route lookup scaling
+Linux results were not collected. WSL exposed only a stopped, Docker-internal
+`docker-desktop` WSL2 distribution, and the Docker Linux engine was unavailable.
+That is not a usable native-Linux validation host. The exact reproducible Linux
+script is `tool/run-phase06-linux.sh`; the manual GitHub Actions workflow also
+runs the same experiment on Ubuntu and labels its artifacts separately. ADR
+0002 therefore remains Proposed.
 
-The synthetic lookup stream contains 90% hits and 10% misses. Values are median
-lookups/second `[minimum, maximum]` over five AOT trials. They measure lookup
-only, not HTTP throughput.
+## Retained Phase 0.5 route-scaling result
 
-| Routes | Strategy | Lookups/second |
-| ---: | --- | ---: |
-| 10 | linear scan | 32.05M `[31.62M, 32.66M]` |
-| 10 | segmented leaf scan | 32.09M `[26.80M, 35.26M]` |
-| 10 | hash map | 56.96M `[56.76M, 57.68M]` |
-| 100 | linear scan | 4.11M `[4.07M, 4.15M]` |
-| 100 | segmented leaf scan | 10.01M `[9.91M, 10.17M]` |
-| 100 | hash map | 49.59M `[48.92M, 50.85M]` |
-| 1,000 | linear scan | 0.436M `[0.435M, 0.440M]` |
-| 1,000 | segmented leaf scan | 1.440M `[1.434M, 1.446M]` |
-| 1,000 | hash map | 41.51M `[41.23M, 43.41M]` |
+The Phase 0.5 AOT lookup experiment remains in
+`phase05-route-scaling-windows-aot.json`. It used a 90%-hit, 10%-miss stream and
+measures lookup only, not HTTP throughput.
 
-Median time per 1,000-route lookup was 2,291 ns for linear scan, 695 ns for
-segmented leaf scan, and 24.1 ns for the hash table. The result argues against
-unbounded linear leaf scans for large static tables. It does not establish a
-final router: the grouped synthetic path shape, Dart's `Map` implementation,
-parameter routes, method dispatch, collision behavior, and generated-code size
-all need broader evaluation.
+| Routes | Linear scan | Segmented leaf scan | Hash map |
+| ---: | ---: | ---: | ---: |
+| 10 | 32.05M/s | 32.09M/s | 56.96M/s |
+| 100 | 4.11M/s | 10.01M/s | 49.59M/s |
+| 1,000 | 0.436M/s | 1.440M/s | 41.51M/s |
 
-## Current interpretation
-
-The static spike demonstrates that direct generated-style routing can remain at
-the raw baseline's binary-size and idle-memory level. Relic has a visible static
-footprint cost but also supplies HTTP behavior that the spike deliberately does
-not own. With no external HTTP throughput or latency results, the evidence does
-not yet show whether the thin runtime's savings justify its correctness and
-maintenance burden. ADR 0002 therefore remains Proposed.
+This rejects unbounded leaf scanning for large route tables in that synthetic
+shape. It does not select the final routing data structure; mixed literal and
+parameterized generated routing remains a later architectural experiment.

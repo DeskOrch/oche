@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:oche_benchmark_harness/benchmark_schedule.dart';
 import 'package:oche_benchmark_harness/result_aggregation.dart';
 
 const _implementations = ['raw_dart_io', 'relic', 'oche_static'];
@@ -13,11 +14,33 @@ Future<void> main(List<String> arguments) async {
     '-',
   );
   final rawTrialFiles = <String>[];
+  var trialSequence = 0;
+  final totalTrials =
+      options.concurrencies.length *
+      options.iterations *
+      _endpoints.length *
+      _implementations.length;
 
   for (final concurrency in options.concurrencies) {
     for (var iteration = 1; iteration <= options.iterations; iteration++) {
-      for (final endpoint in _endpoints) {
-        for (final implementation in _implementations) {
+      final implementationOrder = balancedThreeWayOrder(
+        _implementations,
+        iteration,
+      );
+      final endpointOrder = balancedThreeWayOrder(_endpoints, iteration);
+      for (
+        var endpointIndex = 0;
+        endpointIndex < endpointOrder.length;
+        endpointIndex++
+      ) {
+        final endpoint = endpointOrder[endpointIndex];
+        for (
+          var implementationIndex = 0;
+          implementationIndex < implementationOrder.length;
+          implementationIndex++
+        ) {
+          final implementation = implementationOrder[implementationIndex];
+          trialSequence++;
           final endpointName = endpoint.substring(1).replaceAll('/', '-');
           final output =
               '${options.resultsDirectory}/$timestamp-$implementation-'
@@ -36,6 +59,16 @@ Future<void> main(List<String> arguments) async {
             '--load-generator=${options.loadGenerator}',
             '--oha=${options.ohaPath}',
             '--output=$output',
+            '--suite-run-id=$timestamp',
+            '--iteration=$iteration',
+            '--trial-sequence=$trialSequence',
+            '--implementation-order=${implementationOrder.join(',')}',
+            '--implementation-position=${implementationIndex + 1}',
+            '--endpoint-order=${endpointOrder.join(',')}',
+            '--endpoint-position=${endpointIndex + 1}',
+            '--cooldown=${options.cooldownSeconds}',
+            if (options.environmentType != null)
+              '--environment-type=${options.environmentType}',
           ];
           final customExecutable = options.executableFor(implementation);
           if (customExecutable != null) {
@@ -43,7 +76,8 @@ Future<void> main(List<String> arguments) async {
           }
 
           stdout.writeln(
-            '[c=$concurrency, $iteration/${options.iterations}] '
+            '[$trialSequence/$totalTrials, c=$concurrency, '
+            'iteration=$iteration/${options.iterations}] '
             '$implementation $endpoint',
           );
           final process = await Process.start(
@@ -58,6 +92,11 @@ Future<void> main(List<String> arguments) async {
             return;
           }
           rawTrialFiles.add(output);
+          if (options.cooldownSeconds > 0 && trialSequence < totalTrials) {
+            await Future<void>.delayed(
+              Duration(seconds: options.cooldownSeconds),
+            );
+          }
         }
       }
     }
@@ -91,6 +130,8 @@ final class _SuiteOptions {
     required this.rawExecutable,
     required this.relicExecutable,
     required this.ocheStaticExecutable,
+    required this.cooldownSeconds,
+    required this.environmentType,
   });
 
   final String mode;
@@ -106,6 +147,8 @@ final class _SuiteOptions {
   final String? rawExecutable;
   final String? relicExecutable;
   final String? ocheStaticExecutable;
+  final int cooldownSeconds;
+  final String? environmentType;
 
   String? executableFor(String implementation) => switch (implementation) {
     'raw_dart_io' => rawExecutable,
@@ -147,6 +190,8 @@ final class _SuiteOptions {
       'raw-executable',
       'relic-executable',
       'oche-static-executable',
+      'cooldown',
+      'environment-type',
     };
     final unknown = values.keys.where((key) => !known.contains(key)).toList();
     if (unknown.isNotEmpty) {
@@ -175,6 +220,7 @@ final class _SuiteOptions {
     final duration = int.parse(values['duration'] ?? '30');
     final warmup = int.parse(values['warmup'] ?? '5');
     final iterations = int.parse(values['iterations'] ?? '5');
+    final cooldown = int.parse(values['cooldown'] ?? '2');
     if (port < 1 || port > 65535) {
       throw RangeError.range(port, 1, 65535, 'port');
     }
@@ -182,7 +228,8 @@ final class _SuiteOptions {
         concurrencies.any((value) => value < 1) ||
         duration < 1 ||
         warmup < 0 ||
-        iterations < 1) {
+        iterations < 1 ||
+        cooldown < 0) {
       throw RangeError(
         'concurrency, duration, and iterations must be positive; warmup >= 0.',
       );
@@ -202,6 +249,8 @@ final class _SuiteOptions {
       rawExecutable: values['raw-executable'],
       relicExecutable: values['relic-executable'],
       ocheStaticExecutable: values['oche-static-executable'],
+      cooldownSeconds: cooldown,
+      environmentType: values['environment-type'],
     );
   }
 }

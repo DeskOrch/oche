@@ -6,11 +6,14 @@ Oche is an early experiment, not a production-ready framework. Its first
 development phase measures Dart's server-side performance baseline before any
 high-level framework API or runtime architecture is selected.
 
-Phase 0.5 compares equivalent implementations built on raw `dart:io`, Relic,
-and a deliberately narrow static-routing spike over `dart:io`. It includes
-endpoint contract tests, AOT build commands, repeated-result aggregation, route
-scaling experiments, and a reproducible benchmark harness. See
-[benchmarks/README.md](benchmarks/README.md).
+Phase 0.6 compares equivalent implementations built on raw `dart:io`, Relic,
+and a deliberately narrow static-routing spike over `dart:io`. Its deterministic
+balanced scheduler, environment metadata, AOT build commands, repeated-result
+aggregation, route-scaling evidence, and Windows/Linux reproduction scripts are
+documented in [benchmarks/README.md](benchmarks/README.md). The balanced Windows
+results are summarized in
+[benchmarks/results/README.md](benchmarks/results/README.md); Linux validation is
+still outstanding, so the HTTP-foundation ADR remains Proposed.
 
 ## Repository map
 

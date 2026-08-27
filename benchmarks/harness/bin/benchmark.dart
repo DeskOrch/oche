@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:oche_benchmark_harness/benchmark_result.dart';
+import 'package:oche_benchmark_harness/benchmark_schedule.dart';
+import 'package:oche_benchmark_harness/environment_metadata.dart';
 
 Future<void> main(List<String> arguments) async {
   final configuration = _Configuration.parse(arguments);
@@ -21,6 +23,11 @@ Future<void> main(List<String> arguments) async {
 }
 
 Future<BenchmarkResult> _run(_Configuration configuration) async {
+  final environment = await collectEnvironmentMetadata(
+    loadGenerator: configuration.loadGenerator,
+    ohaPath: configuration.ohaPath,
+    environmentTypeOverride: configuration.environmentType,
+  );
   final launch = _serverLaunch(configuration);
   final executableFile = configuration.mode == 'aot'
       ? File(launch.command)
@@ -119,6 +126,8 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
       warmupSeconds: configuration.warmupSeconds,
       loadGenerator: configuration.loadGenerator,
       startupMs: startupWatch.elapsedMicroseconds / 1000,
+      environment: environment,
+      schedule: configuration.scheduleMetadata,
       requestsPerSecond: load?.requestsPerSecond,
       successRate: load?.successRate,
       p50Ms: load?.p50Ms,
@@ -397,6 +406,8 @@ final class _Configuration {
     required this.ohaPath,
     required this.executablePath,
     required this.outputPath,
+    required this.environmentType,
+    required this.scheduleMetadata,
   });
 
   final String implementation;
@@ -411,6 +422,8 @@ final class _Configuration {
   final String ohaPath;
   final String? executablePath;
   final String? outputPath;
+  final String? environmentType;
+  final Map<String, Object>? scheduleMetadata;
 
   Uri get url => Uri.http('$host:$port', endpoint);
 
@@ -445,6 +458,15 @@ final class _Configuration {
       'oha',
       'executable',
       'output',
+      'environment-type',
+      'suite-run-id',
+      'iteration',
+      'trial-sequence',
+      'implementation-order',
+      'implementation-position',
+      'endpoint-order',
+      'endpoint-position',
+      'cooldown',
     };
     final unknown = values.keys.where((key) => !known.contains(key)).toList();
     if (unknown.isNotEmpty) {
@@ -498,6 +520,27 @@ final class _Configuration {
       ohaPath: values['oha'] ?? 'oha',
       executablePath: values['executable'],
       outputPath: values['output'],
+      environmentType: values['environment-type'],
+      scheduleMetadata: benchmarkScheduleMetadata(
+        suiteRunId: values['suite-run-id'],
+        iteration: _optionalInt(values, 'iteration'),
+        trialSequence: _optionalInt(values, 'trial-sequence'),
+        implementationOrder: _optionalList(values, 'implementation-order'),
+        implementationPosition: _optionalInt(values, 'implementation-position'),
+        endpointOrder: _optionalList(values, 'endpoint-order'),
+        endpointPosition: _optionalInt(values, 'endpoint-position'),
+        cooldownSeconds: _optionalInt(values, 'cooldown'),
+      ),
     );
   }
+}
+
+int? _optionalInt(Map<String, String> values, String key) {
+  final value = values[key];
+  return value == null ? null : int.parse(value);
+}
+
+List<String>? _optionalList(Map<String, String> values, String key) {
+  final value = values[key];
+  return value?.split(',');
 }

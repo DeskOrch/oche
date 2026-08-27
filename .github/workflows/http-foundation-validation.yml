@@ -1,0 +1,46 @@
+name: HTTP foundation validation
+
+on:
+  workflow_dispatch:
+
+env:
+  OHA_VERSION: 1.16.0
+
+jobs:
+  benchmark:
+    name: ${{ matrix.os }} AOT validation
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install pinned oha
+        run: cargo install oha --version ${{ env.OHA_VERSION }} --locked
+      - run: dart pub get
+      - run: dart analyze
+      - run: dart test
+
+      - name: Run Linux validation
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sh tool/run-phase06-linux.sh
+
+      - name: Run Windows validation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tool/run-phase06-windows.ps1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase06-${{ runner.os }}-${{ runner.arch }}
+          path: benchmarks/results/phase06-*/*.json
+          if-no-files-found: warn

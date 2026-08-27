@@ -7,110 +7,170 @@
 
 Oche needs an HTTP foundation that remains close to Dart's runtime cost while
 supporting compile-time-known routes and an enterprise-oriented developer
-experience. Phase 0 established raw `dart:io` and Relic baselines. Phase 0.5
-adds a deliberately narrow static-dispatch spike directly over `dart:io`.
+experience. The candidates tested so far are Relic 1.2.0 and a deliberately
+narrow static-dispatch spike directly over `dart:io`.
 
-The spike is evidence about routing shape, executable size, startup, and idle
-memory. It is not a production router and does not implement middleware,
-streaming policies, WebSockets, protocol edge cases, or security hardening.
+The spike is evidence about dispatch overhead, executable size, startup, and
+memory. It is not a production router and does not implement a public Oche API,
+middleware, streaming policies, WebSocket abstractions, or security hardening.
 
-## Options
+## Options considered
 
-### Option A: Relic as Oche's HTTP foundation
+### Relic as Oche's HTTP foundation
 
 Relic supplies a typed request/response model, trie-based routing, middleware,
 streaming, WebSocket support, connection lifecycle behavior, static assets, and
-HTTP header handling. Oche could generate direct Relic route registration and
-handlers at compile time without runtime reflection or package scanning.
+HTTP header handling. Oche could generate Relic registrations without runtime
+reflection or package scanning.
 
-Trade-offs:
+This reduces Oche's correctness and maintenance burden. It also leaves Relic's
+general routing and message-model costs on every request, adds about 1.6 MiB to
+the current AOT executable, and uses materially more memory under the tested
+load.
 
-- **Performance:** framework-specific routing and message-model overhead remains
-  on every request. HTTP throughput and latency have not yet been measured in
-  this environment.
-- **Memory and binary size:** current Windows AOT measurements show about 17.07
-  MiB idle RSS and a 7.789 MiB binary, versus about 14.57–14.59 MiB and
-  6.17–6.20 MiB for the direct `dart:io` implementations.
-- **HTTP correctness and maintenance:** Relic owns substantially more tested
-  HTTP behavior, reducing Oche's correctness and security burden.
-- **Routing flexibility:** its general router and middleware model support more
-  runtime composition than a generated static table may require, but also cover
-  cases future Oche applications may need.
-- **Streaming, WebSockets, and future HTTP features:** already represented in
-  the foundation rather than becoming Oche-owned protocol work.
-- **Developer ergonomics:** typed APIs are available now. Oche would still need
-  compile-time tooling and its own ergonomic layer.
-- **Compile-time generation:** compatible, although generated routes would
-  target Relic abstractions rather than the shortest possible dispatch path.
+### Thin Oche runtime over `dart:io`
 
-### Option B: Thin Oche runtime directly over `dart:io`
+Oche could generate method-first and path-first dispatch with direct handler
+calls. This fits routes known at compile time and keeps runtime discovery out of
+the request path. The current spike remains effectively at the raw `dart:io`
+baseline for throughput, idle RSS, peak RSS, and executable size on Windows.
 
-Oche could generate method-first, path-first control flow and direct handler
-calls. The Phase 0.5 server uses exact string switches for literal routes and a
-single validated prefix/segment extraction for `/users/{id}`.
+The cost is ownership of framework-level semantics and a larger correctness
+surface. Runtime composition and third-party integration also become deliberate
+extension points rather than properties inherited from a general router.
 
-Trade-offs:
+## Phase 0.6 methodology
 
-- **Performance:** this has the shortest visible dispatch path, but external
-  HTTP throughput and latency evidence is unavailable. Microbenchmark lookup
-  speed must not be treated as end-to-end HTTP speed.
-- **Memory and binary size:** the current spike is 6.171 MiB and about 14.57 MiB
-  idle RSS, close to the raw lower-bound reference.
-- **HTTP correctness and maintenance:** Oche would own response semantics,
-  method negotiation, headers, streaming integration, errors, connection
-  lifecycle, and a growing set of edge cases. That cost can dominate a modest
-  throughput advantage.
-- **Routing flexibility:** generated static dispatch suits routes known at
-  compile time but makes runtime composition and third-party integrations more
-  deliberate.
-- **Streaming, WebSockets, and future HTTP features:** `dart:io` exposes lower
-  level primitives, but Oche would need to define and maintain safe ergonomic
-  APIs without recreating a full server framework.
-- **Developer ergonomics:** the benchmark code is intentionally not ergonomic.
-  Any eventual API must prove that its abstractions do not erase the measured
-  advantage.
-- **Compile-time generation:** a natural fit; generated code can emit direct
-  branches, segmented dispatch, or static lookup data with no runtime discovery.
+The earlier Windows sweep always ran raw `dart:io`, then Relic, then Oche static.
+Phase 0.6 removed that systematic order by cycling through all six permutations
+of the three implementations. Endpoint order uses the same deterministic cycle.
+The first five permutations put every implementation and endpoint first, middle,
+and last at least once. Every raw result records the complete orders, positions,
+iteration, global sequence, suite run ID, and cooldown.
 
-## Evidence collected
+The clean confirmation run used:
 
-All three AOT servers pass the same endpoint contract, including invalid route
-parameters, 404 behavior, and 405 method negotiation. Five process-only trials
-per endpoint found startup medians between 349.6 and 364.6 ms with outliers on
-all implementations. That is insufficient to distinguish startup behavior.
+- Windows native AOT executables, one isolate, and loopback `127.0.0.1`;
+- concurrency 10, 100, and 500 on `/plaintext`, `/json`, and `/users/42`;
+- five iterations, five seconds of separate warmup, 30 seconds measured, and a
+  two-second cooldown between trials;
+- `oha` 1.16.0 for every load trial;
+- 135 retained raw trials and 27 five-sample aggregate groups;
+- median, minimum, maximum, and population standard deviation for every numeric
+  metric, plus median-based ratios against the matching raw group.
 
-Executable sizes on the current Windows x64 host:
+The recorded host was Windows 11 Pro build 26200, Windows x64, Dart 3.13.1,
+Intel Xeon E5-2680 v4, with 28 logical CPUs visible. The aggregate and raw
+evidence were generated under `benchmarks/results/phase06-windows-balanced/`.
+Generated JSON is intentionally ignored by Git; the retained report summarizes
+the evidence, while the cross-platform workflow uploads raw files as artifacts.
 
-| Implementation | Bytes | MiB |
+## Windows evidence
+
+The following values are endpoint-means of the three per-endpoint medians. They
+summarize the trend; the retained aggregate keeps every endpoint separate.
+
+| Concurrency | Implementation | Requests/s | Relative to raw | p50 ms | p95 ms | p99 ms |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 10 | raw `dart:io` | 5,865.6 | 100.00% | 1.664 | 1.951 | 2.194 |
+| 10 | Oche static | 5,900.4 | 100.60% | 1.661 | 1.945 | 2.205 |
+| 10 | Relic | 4,756.5 | 81.09% | 2.028 | 2.720 | 3.097 |
+| 100 | raw `dart:io` | 5,846.3 | 100.00% | 16.852 | 18.736 | 20.398 |
+| 100 | Oche static | 5,866.9 | 100.38% | 16.740 | 18.586 | 20.506 |
+| 100 | Relic | 4,919.6 | 84.17% | 20.131 | 22.817 | 24.776 |
+| 500 | raw `dart:io` | 6,244.3 | 100.00% | 82.863 | 93.858 | 99.520 |
+| 500 | Oche static | 6,273.2 | 100.46% | 82.482 | 93.108 | 97.053 |
+| 500 | Relic | 4,515.9 | 72.32% | 110.696 | 117.608 | 123.998 |
+
+Across individual endpoints, Oche static throughput was 99.53-101.77% of raw at
+concurrency 10, 99.34-102.13% at 100, and 100.26-100.59% at 500. Relic was
+79.12-82.26%, 83.14-85.91%, and 71.76-72.79%, respectively. Oche static p99 was
+94.37-106.15% of raw at concurrency 10, 96.95-105.04% at 100, and
+95.47-98.73% at 500, where lower is better. Relic p99 was 108.72-150.37% of raw
+across the same groups.
+
+| Concurrency | Implementation | Idle RSS MiB | Peak RSS MiB | Server CPU |
+| ---: | --- | ---: | ---: | ---: |
+| 10 | raw `dart:io` | 14.581 | 18.622 | 124.6% |
+| 10 | Oche static | 14.572 | 18.479 | 124.8% |
+| 10 | Relic | 17.065 | 53.092 | 125.6% |
+| 100 | raw `dart:io` | 14.583 | 55.391 | 121.8% |
+| 100 | Oche static | 14.572 | 55.065 | 122.5% |
+| 100 | Relic | 17.074 | 90.436 | 124.9% |
+| 500 | raw `dart:io` | 14.581 | 84.757 | 124.9% |
+| 500 | Oche static | 14.569 | 84.254 | 124.0% |
+| 500 | Relic | 17.070 | 122.948 | 126.4% |
+
+Oche static idle RSS was 99.87-100.00% of raw and peak RSS was 97.57-100.75%.
+Relic idle RSS was 117.01-117.15% of raw. Its peak RSS was 281.34-290.47% at
+concurrency 10, 162.96-163.48% at 100, and 143.49-145.97% at 500. Server CPU
+was similar across implementations even though Relic completed fewer requests;
+100% represents one fully busy logical CPU and runtime helper threads can put
+the whole-process value above 100%.
+
+| Implementation | Native executable MiB | Relative to raw (lower is better) |
 | --- | ---: | ---: |
-| raw `dart:io` | 6,505,472 | 6.204 |
-| Relic | 8,167,424 | 7.789 |
-| Oche static spike | 6,470,656 | 6.171 |
+| raw `dart:io` | 6.204 | 100.00% |
+| Oche static | 6.171 | 99.46% |
+| Relic | 7.789 | 125.55% |
 
-Median idle RSS across endpoints is approximately 14.58 MiB for raw `dart:io`,
-17.07 MiB for Relic, and 14.57 MiB for the static spike.
+Startup medians overlapped at roughly 308-327 ms, so the run does not establish
+a startup ranking.
 
-A separate AOT lookup microbenchmark used 90% hits and 10% misses. At 1,000
-routes, median lookup throughput was approximately 0.44 million/s for a full
-linear scan, 1.44 million/s for a ten-way segmented leaf scan, and 41.51
-million/s for a prebuilt hash table. This rejects unbounded leaf scanning for
-large route tables in this synthetic shape. It does not establish that a hash
-table is the final router or measure HTTP request throughput.
+The previous fixed-order trend survived balancing. The largest change was a
+5.94 percentage-point increase in Relic's `/users/42` throughput ratio at
+concurrency 100; it still reached only 85.91% of raw. At concurrency 500 the
+new ratios remained especially stable for Oche static and especially costly for
+Relic.
 
-No supported external load generator was installed. Requests/second, p50/p95/
-p99 latency, load RSS, and load CPU remain unknown.
+Twenty of the 45 concurrency-500 trials reported tiny non-success fractions;
+the worst was approximately 20 of 182,865 requests, or 99.989% success. Relic
+also had one `/users/42`, concurrency-100 p99 spike to 101.689 ms; the other
+four trials were 24.031-32.642 ms and the group median was 24.379 ms. These
+effects do not alter the median ranking, but they limit claims about extreme
+tail reliability on this loopback developer host.
+
+## Linux validation
+
+No usable Linux benchmark host was available. WSL listed only the stopped,
+Docker-internal `docker-desktop` distribution at WSL version 2, and the Docker
+Linux engine was not running. Treating that as native Linux, or fabricating a
+result from it, would violate the environment rule.
+
+The repository includes an exact Linux AOT script and a manually triggered
+Windows/Ubuntu validation workflow. Until one of those produces retained Linux
+evidence, cross-platform reproduction remains unknown.
+
+## Architectural boundary
+
+Choosing `dart:io` would not mean implementing HTTP from TCP sockets. Dart
+continues to own `HttpServer`, `HttpRequest`, `HttpResponse`, WebSocket protocol
+machinery, parsing, and connection behavior. A thin Oche layer may own routing,
+middleware execution, request binding, response handling, error mapping, and
+application lifecycle. It should delegate protocol behavior to `dart:io` and
+avoid recreating a full HTTP server framework.
 
 ## Proposed disposition
 
-Keep this ADR **Proposed**. The evidence shows that a thin static runtime can
-match raw `dart:io` binary size and idle memory, and that static lookup strategy
-matters at larger route counts. It does not show whether the end-to-end savings
-over Relic are material enough to justify taking ownership of higher-level HTTP
-behavior.
+Keep this ADR **Proposed** because Linux validation is outstanding. Within the
+available Windows evidence, the recommended direction is a thin Oche runtime
+over `dart:io`: it satisfies the stated 95%-of-raw throughput criterion on every
+important workload, remains at raw's memory and binary-size baseline, and fits
+Oche's compile-time/native-first model. Relic's correctness and maintenance
+benefits remain real, but its measured request-path and footprint costs are too
+large to make it the preferred foundation on this evidence.
 
-The next evidence should be five repeated AOT trials for all endpoints on a
-representative Linux host using the same external load generator, followed by
-targeted CPU/allocation profiling only where it explains an observed gap. If
-the gap is small, prefer Relic's correctness and maintenance benefits. If it is
-large and attributable to unavoidable Relic abstractions, investigate a narrow
-generated router/runtime boundary without reimplementing HTTP parsing.
+Confidence is high for the Windows relative ranking and moderate for the
+architectural recommendation overall. The remaining risks are Linux behavior,
+separate-host load generation, broader route shapes, streaming and backpressure,
+WebSockets, response/error semantics, security edge cases, and the maintenance
+cost of keeping Oche's framework layer thin.
+
+The next architectural experiment, after review and only as Phase 1 work,
+should compare two generated static-dispatch kernels for mixed literal and
+parameterized route sets at 10, 100, and 1,000 routes. Keep handlers and
+`dart:io` transport identical; validate precedence, parameter failures, 404,
+405, and response/error mapping; measure AOT end-to-end throughput, p99, RSS,
+and code size against raw dispatch. This would select the internal kernel
+boundary and routing shape without introducing public annotations, dependency
+injection, or other application-framework APIs.

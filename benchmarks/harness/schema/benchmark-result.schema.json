@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Oche Phase 0 benchmark result",
+  "title": "Oche HTTP benchmark result",
   "type": "object",
   "required": [
     "timestampUtc",
@@ -13,7 +13,8 @@
     "durationSeconds",
     "warmupSeconds",
     "loadGenerator",
-    "startupMs"
+    "startupMs",
+    "environment"
   ],
   "properties": {
     "timestampUtc": { "type": "string", "format": "date-time" },
@@ -27,6 +28,74 @@
     "warmupSeconds": { "type": "integer" },
     "loadGenerator": { "enum": ["oha", "none"] },
     "startupMs": { "type": "number" },
+    "environment": {
+      "type": "object",
+      "required": [
+        "operatingSystem",
+        "osVersion",
+        "architecture",
+        "dartVersion",
+        "logicalCpuCount",
+        "environmentType",
+        "loadGenerator"
+      ],
+      "properties": {
+        "operatingSystem": { "type": "string" },
+        "osVersion": { "type": "string" },
+        "architecture": { "type": "string" },
+        "dartVersion": { "type": "string" },
+        "cpuModel": { "type": "string" },
+        "logicalCpuCount": { "type": "integer", "minimum": 1 },
+        "environmentType": { "type": "string" },
+        "loadGenerator": { "type": "string" },
+        "loadGeneratorVersion": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "schedule": {
+      "type": "object",
+      "required": [
+        "suiteRunId",
+        "iteration",
+        "trialSequence",
+        "implementationOrder",
+        "implementationPosition",
+        "endpointOrder",
+        "endpointPosition",
+        "cooldownSeconds"
+      ],
+      "properties": {
+        "suiteRunId": { "type": "string" },
+        "iteration": { "type": "integer", "minimum": 1 },
+        "trialSequence": { "type": "integer", "minimum": 1 },
+        "implementationOrder": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "implementationPosition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "endpointOrder": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "endpointPosition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "cooldownSeconds": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "requestsPerSecond": { "type": "number" },
     "successRate": { "type": "number" },
     "latency": {

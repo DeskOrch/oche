@@ -2,5 +2,8 @@
 .packages
 build/
 coverage/
+# Generated benchmark evidence; tracked Markdown reports summarize the runs.
 benchmarks/results/*.json
+benchmarks/results/**/*.json
 !benchmarks/results/.gitkeep
+/oche-benchmark-results.zip

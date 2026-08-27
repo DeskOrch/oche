@@ -15,6 +15,10 @@ void main() {
       warmupSeconds: 5,
       loadGenerator: 'none',
       startupMs: 12.5,
+      environment: const {
+        'operatingSystem': 'windows',
+        'environmentType': 'native-windows',
+      },
       unavailableMetrics: const ['requestsPerSecond'],
     ).toJson();
 
@@ -23,5 +27,9 @@ void main() {
     expect(result, isNot(contains('latency')));
     expect(result, isNot(contains('memory')));
     expect(result['unavailableMetrics'], ['requestsPerSecond']);
+    expect(result['environment'], {
+      'operatingSystem': 'windows',
+      'environmentType': 'native-windows',
+    });
   });
 }

@@ -1,4 +1,4 @@
-# Oche Phase 0.5 performance laboratory
+# Oche HTTP foundation performance laboratory
 
 This laboratory compares equivalent single-isolate HTTP servers built with raw
 `dart:io`, Relic, and a narrow Oche static-routing spike over `dart:io`. It does
@@ -113,14 +113,37 @@ use AOT. Override the default binary with `--executable=/path/to/binary`.
 ## Run and aggregate the full suite
 
 The comparison defaults are AOT, five iterations, five-second warmup, 30-second
-measurement, and concurrency 100. Every implementation/endpoint trial remains
-as an individual JSON file. After the run, the suite writes an aggregate with
-sample count, median, minimum, maximum, and population standard deviation for
-every available numeric metric.
+measurement, concurrency 100, and a two-second cooldown between trials. Every
+implementation/endpoint trial remains as an individual JSON file. After the
+run, the suite writes an aggregate with sample count, median, minimum, maximum,
+and population standard deviation for every available numeric metric.
 
 ```console
 dart run benchmarks/harness/bin/suite.dart --mode=aot --warmup=5 --duration=30 --concurrency=100 --iterations=5
 ```
+
+### Balanced deterministic ordering
+
+The suite does not keep implementations or endpoints in a fixed order. For
+three values it walks this fixed six-permutation cycle:
+
+```text
+1: A, B, C
+2: B, C, A
+3: C, A, B
+4: A, C, B
+5: B, A, C
+6: C, B, A
+```
+
+The cycle then repeats. Every value occupies every position during the default
+five iterations and every position exactly twice over six iterations. There is
+no random seed: iteration number fully determines the reproducible order. Each
+raw result records the full implementation and endpoint orders, their one-based
+positions, iteration, global trial sequence, suite run ID, and cooldown.
+
+Cooldown is separate from warmup and measured duration. Configure it with
+`--cooldown`; zero disables it.
 
 Output appears under `benchmarks/results/` with one shared timestamp. The final
 `*-aggregate.json` references all raw trial paths. To rebuild an aggregate:
@@ -134,6 +157,12 @@ Schemas:
 - [`harness/schema/benchmark-result.schema.json`](harness/schema/benchmark-result.schema.json)
 - [`harness/schema/benchmark-aggregate.schema.json`](harness/schema/benchmark-aggregate.schema.json)
 
+Aggregate groups include median-based normalized ratios against the matching
+raw `dart:io` group for requests/second, p99 latency, idle RSS, peak RSS, and
+binary size. Raw is 100 for each `percentOfRaw`; `preferredDirection` labels
+each metric `higherIsBetter` or `lowerIsBetter`, so p99 or RSS above 100 is
+explicitly worse rather than faster.
+
 ## Optional concurrency sweep
 
 The normal suite tests one concurrency. To investigate scaling behavior, pass a
@@ -144,6 +173,29 @@ dart run benchmarks/harness/bin/suite.dart --mode=aot --warmup=5 --duration=30 -
 ```
 
 This is intentionally optional: the example executes 270 raw HTTP trials.
+
+## Phase 0.6 cross-platform validation
+
+The focused validation uses only concurrency 10, 100, and 500, five iterations,
+five-second warmup, 30-second measurement, and two-second cooldown:
+
+```powershell
+./tool/run-phase06-windows.ps1 -OhaPath C:\path\to\oha.exe
+```
+
+```sh
+PHASE06_OHA_PATH=/path/to/oha sh tool/run-phase06-linux.sh
+```
+
+Linux environment detection records `native-linux`, `wsl2`, `wsl`,
+`linux-container`, or `wsl2-container` from kernel and container evidence. Do
+not override WSL2 as native Linux. The optional `--environment-type` override
+exists only for hosts whose identity cannot be detected reliably.
+
+The manual GitHub Actions workflow
+[`http-foundation-validation.yml`](../.github/workflows/http-foundation-validation.yml)
+runs the identical Windows and Ubuntu AOT experiment, pins `oha` 1.16.0, and
+uploads every raw and aggregate JSON file as a per-platform artifact.
 
 ## Static route-table scaling experiment
 
@@ -187,9 +239,13 @@ mistaken for a final routing design.
 - **Idle RSS:** Windows `Get-Process.WorkingSet64`, or RSS reported by `ps` on
   Linux/macOS, sampled after readiness and before warmup.
 - **Load RSS:** maximum server RSS observed at 250 ms intervals during `oha`.
-- **CPU:** server CPU-time delta divided by load wall time. A single isolate
-  normally approaches 100% when it saturates one logical core.
+- **CPU:** server CPU-time delta divided by load wall time. One fully busy
+  logical CPU is 100%; runtime helper threads can put the whole process above
+  100% even when application dispatch uses one isolate.
 - **Executable size:** native file length in MiB; absent for JIT runs.
+- **Environment metadata:** OS/version, ABI architecture, Dart version, CPU
+  model when available, logical CPUs, environment type, and load-generator
+  version are captured before server startup timing begins.
 
 ## Profiling
 

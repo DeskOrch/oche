@@ -19,6 +19,14 @@ const _metricPaths = <String, List<String>>{
   'binarySizeMb': ['binarySizeMb'],
 };
 
+const _relativeMetricDirections = <String, String>{
+  'requestsPerSecond': 'higherIsBetter',
+  'p99Ms': 'lowerIsBetter',
+  'idleRssMb': 'lowerIsBetter',
+  'peakLoadRssMb': 'lowerIsBetter',
+  'binarySizeMb': 'lowerIsBetter',
+};
+
 /// Reads raw trial JSON files and returns a grouped aggregate document.
 Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   if (paths.isEmpty) {
@@ -40,6 +48,7 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   final sortedEntries = groups.entries.toList()
     ..sort((left, right) => left.key.compareTo(right.key));
   final aggregateGroups = <Map<String, Object>>[];
+  final aggregateByKey = <_GroupKey, Map<String, Object>>{};
   for (final entry in sortedEntries) {
     final metrics = <String, Object>{};
     for (final metric in _metricPaths.entries) {
@@ -56,13 +65,28 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
             .toSet()
             .toList()
           ..sort();
-    aggregateGroups.add({
+    final aggregateGroup = <String, Object>{
       ...entry.key.toJson(),
       'trialCount': entry.value.length,
       'rawTrialFiles': entry.value.map((trial) => trial.path).toList(),
       'metrics': metrics,
       if (unavailable.isNotEmpty) 'unavailableMetrics': unavailable,
-    });
+    };
+    aggregateGroups.add(aggregateGroup);
+    aggregateByKey[entry.key] = aggregateGroup;
+  }
+
+  final rawByComparison = <String, Map<String, Object>>{};
+  for (final entry in aggregateByKey.entries) {
+    if (entry.key.implementation == 'raw_dart_io') {
+      rawByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+  for (final entry in aggregateByKey.entries) {
+    final raw = rawByComparison[entry.key.comparisonFingerprint];
+    if (raw == null) continue;
+    final relative = _relativeMetrics(entry.value, raw);
+    if (relative.isNotEmpty) entry.value['relativeToRaw'] = relative;
   }
 
   return {
@@ -72,6 +96,37 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
     'rawTrialCount': paths.length,
     'groups': aggregateGroups,
   };
+}
+
+Map<String, Object> _relativeMetrics(
+  Map<String, Object> group,
+  Map<String, Object> rawGroup,
+) {
+  final metrics = group['metrics'];
+  final rawMetrics = rawGroup['metrics'];
+  if (metrics is! Map<String, Object> || rawMetrics is! Map<String, Object>) {
+    return const {};
+  }
+
+  final relative = <String, Object>{};
+  for (final specification in _relativeMetricDirections.entries) {
+    final summary = metrics[specification.key];
+    final rawSummary = rawMetrics[specification.key];
+    if (summary is! Map<String, Object> || rawSummary is! Map<String, Object>) {
+      continue;
+    }
+    final median = summary['median'];
+    final rawMedian = rawSummary['median'];
+    if (median is! num || rawMedian is! num || rawMedian == 0) continue;
+    final percentOfRaw = median.toDouble() / rawMedian.toDouble() * 100;
+    relative[specification.key] = {
+      'basis': 'groupMedian',
+      'percentOfRaw': percentOfRaw,
+      'deltaPercent': percentOfRaw - 100,
+      'preferredDirection': specification.value,
+    };
+  }
+  return relative;
 }
 
 double? _readNumber(Map<String, Object?> json, List<String> path) {
@@ -108,6 +163,7 @@ final class _GroupKey implements Comparable<_GroupKey> {
     required this.durationSeconds,
     required this.warmupSeconds,
     required this.loadGenerator,
+    required this.environment,
   });
 
   factory _GroupKey.fromJson(Map<String, Object?> json) => _GroupKey(
@@ -119,6 +175,7 @@ final class _GroupKey implements Comparable<_GroupKey> {
     durationSeconds: _requiredInt(json, 'durationSeconds'),
     warmupSeconds: _requiredInt(json, 'warmupSeconds'),
     loadGenerator: _requiredString(json, 'loadGenerator'),
+    environment: _optionalMap(json, 'environment'),
   );
 
   final String implementation;
@@ -129,6 +186,7 @@ final class _GroupKey implements Comparable<_GroupKey> {
   final int durationSeconds;
   final int warmupSeconds;
   final String loadGenerator;
+  final Map<String, Object?> environment;
 
   Map<String, Object> toJson() => {
     'implementation': implementation,
@@ -139,13 +197,26 @@ final class _GroupKey implements Comparable<_GroupKey> {
     'durationSeconds': durationSeconds,
     'warmupSeconds': warmupSeconds,
     'loadGenerator': loadGenerator,
+    if (environment.isNotEmpty) 'environment': environment,
   };
 
   @override
   int compareTo(_GroupKey other) => _sortKey.compareTo(other._sortKey);
 
   String get _sortKey =>
-      '$implementation\u0000$endpoint\u0000$concurrency\u0000$mode';
+      '$implementation\u0000$endpoint\u0000$concurrency\u0000$mode\u0000'
+      '${jsonEncode(environment)}';
+
+  String get comparisonFingerprint => jsonEncode({
+    'mode': mode,
+    'host': host,
+    'endpoint': endpoint,
+    'concurrency': concurrency,
+    'durationSeconds': durationSeconds,
+    'warmupSeconds': warmupSeconds,
+    'loadGenerator': loadGenerator,
+    'environment': environment,
+  });
 
   @override
   bool operator ==(Object other) =>
@@ -157,7 +228,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
       concurrency == other.concurrency &&
       durationSeconds == other.durationSeconds &&
       warmupSeconds == other.warmupSeconds &&
-      loadGenerator == other.loadGenerator;
+      loadGenerator == other.loadGenerator &&
+      jsonEncode(environment) == jsonEncode(other.environment);
 
   @override
   int get hashCode => Object.hash(
@@ -169,6 +241,7 @@ final class _GroupKey implements Comparable<_GroupKey> {
     durationSeconds,
     warmupSeconds,
     loadGenerator,
+    jsonEncode(environment),
   );
 }
 
@@ -182,4 +255,11 @@ int _requiredInt(Map<String, Object?> json, String key) {
   final value = json[key];
   if (value is int) return value;
   throw FormatException('Expected integer field "$key", got $value.');
+}
+
+Map<String, Object?> _optionalMap(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value == null) return const {};
+  if (value is Map<String, Object?>) return value;
+  throw FormatException('Expected object field "$key", got $value.');
 }

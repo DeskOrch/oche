@@ -1,0 +1,28 @@
+name: oche_workspace
+description: Repository tooling and tests for the Oche monorepo.
+version: 0.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+workspace:
+  - packages/oche
+  - packages/oche_core
+  - packages/oche_codegen
+  - packages/oche_cli
+  - packages/oche_test
+  - benchmarks/raw_dart_io
+  - benchmarks/relic
+  - benchmarks/oche_static
+  - benchmarks/harness
+
+dependencies:
+  oche_benchmark_harness: ^0.0.1
+  oche_static_benchmark: ^0.0.1
+  raw_dart_io_benchmark: ^0.0.1
+  relic_benchmark: ^0.0.1
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.0

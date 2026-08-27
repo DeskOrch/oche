@@ -1,0 +1,8 @@
+name: oche_static_benchmark
+description: Static dart:io routing spike for Oche Phase 0.5.
+version: 0.0.1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0

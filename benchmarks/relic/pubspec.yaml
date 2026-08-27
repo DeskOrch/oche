@@ -1,0 +1,11 @@
+name: relic_benchmark
+description: Relic HTTP baseline for Oche Phase 0.
+version: 0.0.1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  relic: ^1.2.0

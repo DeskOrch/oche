@@ -1,0 +1,8 @@
+name: raw_dart_io_benchmark
+description: Raw dart:io HTTP baseline for Oche Phase 0.
+version: 0.0.1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0

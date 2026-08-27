@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche Phase 0.5 HTTP benchmark aggregate",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "generatedAtUtc",
+    "rawTrialCount",
+    "groups"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "oche-http-benchmark-aggregate" },
+    "generatedAtUtc": { "type": "string", "format": "date-time" },
+    "rawTrialCount": { "type": "integer" },
+    "groups": { "type": "array" }
+  },
+  "additionalProperties": false
+}

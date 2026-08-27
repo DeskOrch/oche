@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche Phase 0 benchmark result",
+  "type": "object",
+  "required": [
+    "timestampUtc",
+    "implementation",
+    "mode",
+    "host",
+    "port",
+    "endpoint",
+    "concurrency",
+    "durationSeconds",
+    "warmupSeconds",
+    "loadGenerator",
+    "startupMs"
+  ],
+  "properties": {
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "implementation": { "enum": ["raw_dart_io", "relic", "oche_static"] },
+    "mode": { "enum": ["jit", "aot"] },
+    "host": { "type": "string" },
+    "port": { "type": "integer" },
+    "endpoint": { "type": "string" },
+    "concurrency": { "type": "integer" },
+    "durationSeconds": { "type": "integer" },
+    "warmupSeconds": { "type": "integer" },
+    "loadGenerator": { "enum": ["oha", "none"] },
+    "startupMs": { "type": "number" },
+    "requestsPerSecond": { "type": "number" },
+    "successRate": { "type": "number" },
+    "latency": {
+      "type": "object",
+      "properties": {
+        "p50Ms": { "type": "number" },
+        "p95Ms": { "type": "number" },
+        "p99Ms": { "type": "number" }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "idleRssMb": { "type": "number" },
+        "peakLoadRssMb": { "type": "number" }
+      }
+    },
+    "cpuUtilizationPercent": { "type": "number" },
+    "binarySizeMb": { "type": "number" },
+    "unavailableMetrics": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

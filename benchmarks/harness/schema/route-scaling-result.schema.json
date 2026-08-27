@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche Phase 0.5 static route-scaling result",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "timestampUtc",
+    "runtime",
+    "configuration",
+    "trials",
+    "aggregates"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "oche-static-route-scaling" },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "runtime": { "type": "string" },
+    "configuration": { "type": "object" },
+    "trials": { "type": "array" },
+    "aggregates": { "type": "array" }
+  },
+  "additionalProperties": false
+}

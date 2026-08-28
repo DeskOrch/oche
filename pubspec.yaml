@@ -15,6 +15,7 @@ workspace:
   - benchmarks/raw_dart_io
   - benchmarks/relic
   - benchmarks/oche_static
+  - benchmarks/routing_kernel
   - benchmarks/harness
 
 dependencies:
@@ -22,6 +23,7 @@ dependencies:
   oche_static_benchmark: ^0.0.1
   raw_dart_io_benchmark: ^0.0.1
   relic_benchmark: ^0.0.1
+  routing_kernel_benchmark: ^0.0.1
 
 dev_dependencies:
   lints: ^6.0.0

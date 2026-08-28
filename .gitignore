@@ -7,3 +7,4 @@ benchmarks/results/*.json
 benchmarks/results/**/*.json
 !benchmarks/results/.gitkeep
 /oche-benchmark-results.zip
+benchmarks/routing_kernel/generated/

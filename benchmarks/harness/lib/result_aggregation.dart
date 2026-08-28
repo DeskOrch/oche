@@ -17,14 +17,24 @@ const _metricPaths = <String, List<String>>{
   'peakLoadRssMb': ['memory', 'peakLoadRssMb'],
   'cpuUtilizationPercent': ['cpuUtilizationPercent'],
   'binarySizeMb': ['binarySizeMb'],
+  'generatedSourceBytes': ['generatedSourceBytes'],
+  'generatedSourceLines': ['generatedSourceLines'],
+  'compileDurationMs': ['compileDurationMs'],
 };
 
-const _relativeMetricDirections = <String, String>{
+const _relativeToRawMetricDirections = <String, String>{
   'requestsPerSecond': 'higherIsBetter',
   'p99Ms': 'lowerIsBetter',
   'idleRssMb': 'lowerIsBetter',
   'peakLoadRssMb': 'lowerIsBetter',
   'binarySizeMb': 'lowerIsBetter',
+};
+
+const _relativeToTenRoutesMetricDirections = <String, String>{
+  ..._relativeToRawMetricDirections,
+  'generatedSourceBytes': 'lowerIsBetter',
+  'generatedSourceLines': 'lowerIsBetter',
+  'compileDurationMs': 'lowerIsBetter',
 };
 
 /// Reads raw trial JSON files and returns a grouped aggregate document.
@@ -85,8 +95,29 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   for (final entry in aggregateByKey.entries) {
     final raw = rawByComparison[entry.key.comparisonFingerprint];
     if (raw == null) continue;
-    final relative = _relativeMetrics(entry.value, raw);
+    final relative = _relativeMetrics(
+      entry.value,
+      raw,
+      _relativeToRawMetricDirections,
+    );
     if (relative.isNotEmpty) entry.value['relativeToRaw'] = relative;
+  }
+
+  final tenRoutesByComparison = <String, Map<String, Object>>{};
+  for (final entry in aggregateByKey.entries) {
+    if (entry.key.routeCount == 10) {
+      tenRoutesByComparison[entry.key.routeScalingFingerprint] = entry.value;
+    }
+  }
+  for (final entry in aggregateByKey.entries) {
+    final tenRoutes = tenRoutesByComparison[entry.key.routeScalingFingerprint];
+    if (tenRoutes == null) continue;
+    final relative = _relativeMetrics(
+      entry.value,
+      tenRoutes,
+      _relativeToTenRoutesMetricDirections,
+    );
+    if (relative.isNotEmpty) entry.value['relativeToTenRoutes'] = relative;
   }
 
   return {
@@ -101,6 +132,7 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
 Map<String, Object> _relativeMetrics(
   Map<String, Object> group,
   Map<String, Object> rawGroup,
+  Map<String, String> metricDirections,
 ) {
   final metrics = group['metrics'];
   final rawMetrics = rawGroup['metrics'];
@@ -109,7 +141,7 @@ Map<String, Object> _relativeMetrics(
   }
 
   final relative = <String, Object>{};
-  for (final specification in _relativeMetricDirections.entries) {
+  for (final specification in metricDirections.entries) {
     final summary = metrics[specification.key];
     final rawSummary = rawMetrics[specification.key];
     if (summary is! Map<String, Object> || rawSummary is! Map<String, Object>) {
@@ -159,6 +191,10 @@ final class _GroupKey implements Comparable<_GroupKey> {
     required this.mode,
     required this.host,
     required this.endpoint,
+    required this.requestMethod,
+    required this.expectedStatus,
+    required this.routeCount,
+    required this.workload,
     required this.concurrency,
     required this.durationSeconds,
     required this.warmupSeconds,
@@ -171,6 +207,10 @@ final class _GroupKey implements Comparable<_GroupKey> {
     mode: _requiredString(json, 'mode'),
     host: _requiredString(json, 'host'),
     endpoint: _requiredString(json, 'endpoint'),
+    requestMethod: _optionalString(json, 'requestMethod') ?? 'GET',
+    expectedStatus: _optionalInt(json, 'expectedStatus') ?? 200,
+    routeCount: _optionalInt(json, 'routeCount'),
+    workload: _optionalString(json, 'workload'),
     concurrency: _requiredInt(json, 'concurrency'),
     durationSeconds: _requiredInt(json, 'durationSeconds'),
     warmupSeconds: _requiredInt(json, 'warmupSeconds'),
@@ -182,6 +222,10 @@ final class _GroupKey implements Comparable<_GroupKey> {
   final String mode;
   final String host;
   final String endpoint;
+  final String requestMethod;
+  final int expectedStatus;
+  final int? routeCount;
+  final String? workload;
   final int concurrency;
   final int durationSeconds;
   final int warmupSeconds;
@@ -193,6 +237,10 @@ final class _GroupKey implements Comparable<_GroupKey> {
     'mode': mode,
     'host': host,
     'endpoint': endpoint,
+    'requestMethod': requestMethod,
+    'expectedStatus': expectedStatus,
+    'routeCount': ?routeCount,
+    'workload': ?workload,
     'concurrency': concurrency,
     'durationSeconds': durationSeconds,
     'warmupSeconds': warmupSeconds,
@@ -203,14 +251,31 @@ final class _GroupKey implements Comparable<_GroupKey> {
   @override
   int compareTo(_GroupKey other) => _sortKey.compareTo(other._sortKey);
 
-  String get _sortKey =>
-      '$implementation\u0000$endpoint\u0000$concurrency\u0000$mode\u0000'
-      '${jsonEncode(environment)}';
+  String get _sortKey => jsonEncode(toJson());
 
   String get comparisonFingerprint => jsonEncode({
     'mode': mode,
     'host': host,
     'endpoint': endpoint,
+    'requestMethod': requestMethod,
+    'expectedStatus': expectedStatus,
+    'routeCount': routeCount,
+    'workload': workload,
+    'concurrency': concurrency,
+    'durationSeconds': durationSeconds,
+    'warmupSeconds': warmupSeconds,
+    'loadGenerator': loadGenerator,
+    'environment': environment,
+  });
+
+  String get routeScalingFingerprint => jsonEncode({
+    'implementation': implementation,
+    'mode': mode,
+    'host': host,
+    'endpoint': endpoint,
+    'requestMethod': requestMethod,
+    'expectedStatus': expectedStatus,
+    'workload': workload,
     'concurrency': concurrency,
     'durationSeconds': durationSeconds,
     'warmupSeconds': warmupSeconds,
@@ -225,6 +290,10 @@ final class _GroupKey implements Comparable<_GroupKey> {
       mode == other.mode &&
       host == other.host &&
       endpoint == other.endpoint &&
+      requestMethod == other.requestMethod &&
+      expectedStatus == other.expectedStatus &&
+      routeCount == other.routeCount &&
+      workload == other.workload &&
       concurrency == other.concurrency &&
       durationSeconds == other.durationSeconds &&
       warmupSeconds == other.warmupSeconds &&
@@ -237,6 +306,10 @@ final class _GroupKey implements Comparable<_GroupKey> {
     mode,
     host,
     endpoint,
+    requestMethod,
+    expectedStatus,
+    routeCount,
+    workload,
     concurrency,
     durationSeconds,
     warmupSeconds,
@@ -253,6 +326,20 @@ String _requiredString(Map<String, Object?> json, String key) {
 
 int _requiredInt(Map<String, Object?> json, String key) {
   final value = json[key];
+  if (value is int) return value;
+  throw FormatException('Expected integer field "$key", got $value.');
+}
+
+String? _optionalString(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value == null) return null;
+  if (value is String) return value;
+  throw FormatException('Expected string field "$key", got $value.');
+}
+
+int? _optionalInt(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value == null) return null;
   if (value is int) return value;
   throw FormatException('Expected integer field "$key", got $value.');
 }

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche routing-kernel AOT build measurements",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "timestampUtc",
+    "platform",
+    "dartVersion",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "oche-routing-kernel-build" },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "platform": { "type": "string" },
+    "dartVersion": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "implementation",
+          "sourcePath",
+          "sourceSha256",
+          "generatedSourceBytes",
+          "generatedSourceLines",
+          "compileDurationMs",
+          "executablePath",
+          "executableSha256",
+          "executableBytes"
+        ],
+        "properties": {
+          "implementation": { "type": "string" },
+          "routeCount": { "enum": [10, 100, 1000] },
+          "sourcePath": { "type": "string" },
+          "sourceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "generatedSourceBytes": { "type": "integer", "minimum": 0 },
+          "generatedSourceLines": { "type": "integer", "minimum": 0 },
+          "compileDurationMs": { "type": "number", "minimum": 0 },
+          "executablePath": { "type": "string" },
+          "executableSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "executableBytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,8 @@
+name: routing_kernel_benchmark
+description: Internal generated routing-kernel experiments for Oche Phase 1A.
+version: 0.0.1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0

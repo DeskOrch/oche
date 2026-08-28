@@ -113,3 +113,85 @@ measures lookup only, not HTTP throughput.
 This rejects unbounded leaf scanning for large route tables in that synthetic
 shape. It does not select the final routing data structure; mixed literal and
 parameterized generated routing remains a later architectural experiment.
+
+## Phase 1A generated routing-kernel results
+
+### Environment and protocol
+
+- Dates: 2026-08-27 through 2026-08-28
+- Environment: the same native-Windows host and Dart 3.13.1 AOT setup above
+- Implementations: hand-written raw `dart:io`, generated segmented tree, and
+  generated guarded hash-assisted index
+- Route templates: 10, 100, and 1,000
+- Success workloads: literal, one typed parameter, and two typed parameters
+- Error workloads: 405 method mismatch, 400 invalid parameter, and 500
+  unexpected exception
+- Concurrency: 10, 100, and 500; five repetitions per group
+- Per trial: five-second warmup, 30-second measurement, two-second cooldown
+- Run IDs: `2026-08-27T23-10-27-951515Z` (success) and
+  `2026-08-28T15-00-00-000000Z` (error)
+
+The two matrices contain 405 raw trials each. All JSON measurements remain
+local and ignored by Git; this tracked report preserves their summary.
+
+### Successful HTTP requests
+
+Values average the three workload-level medians for each point. Percentages in
+parentheses are throughput relative to the matching raw group.
+
+| Routes | Concurrency | Raw req/s | Tree req/s | Indexed req/s | Raw p99 ms | Tree p99 ms | Indexed p99 ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 10 | 5,635.4 | 5,718.1 (101.48%) | 5,766.8 (102.36%) | 2.464 | 2.366 | 2.292 |
+| 10 | 100 | 5,858.7 | 5,855.6 (99.95%) | 5,860.6 (100.03%) | 19.840 | 19.652 | 19.219 |
+| 10 | 500 | 6,158.8 | 6,191.4 (100.53%) | 6,203.1 (100.72%) | 101.325 | 99.490 | 98.179 |
+| 100 | 10 | 5,874.7 | 5,932.1 (100.99%) | 5,893.4 (100.33%) | 2.185 | 2.116 | 2.195 |
+| 100 | 100 | 5,951.5 | 5,941.7 (99.84%) | 5,966.8 (100.26%) | 18.828 | 18.950 | 18.879 |
+| 100 | 500 | 5,878.6 | 5,982.0 (101.76%) | 5,945.5 (101.13%) | 112.090 | 109.862 | 110.205 |
+| 1,000 | 10 | 5,604.7 | 5,486.8 (97.94%) | 5,552.3 (99.11%) | 2.519 | 2.683 | 2.618 |
+| 1,000 | 100 | 5,803.3 | 5,709.7 (98.39%) | 5,788.2 (99.74%) | 21.299 | 22.813 | 21.240 |
+| 1,000 | 500 | 6,041.6 | 6,047.8 (100.10%) | 6,018.1 (99.61%) | 105.007 | 105.681 | 109.079 |
+
+Tree met the 95%-of-raw budget in all 27 workload groups; its minimum was
+96.59%. Indexed averaged slightly higher overall but had one noisy
+1,000-route/literal/c=10 group at 94.69% of raw and p99 at 117.47% of raw.
+At concurrency 100, p50/p95/p99 stayed close: across 10/100/1,000 routes tree
+ranged 16.621-17.103/17.775-19.566/18.950-22.813 ms and indexed ranged
+16.578-16.934/17.662-18.783/18.879-21.240 ms.
+
+Idle RSS was 14.637-15.020 MiB for tree and 14.645-15.066 MiB for indexed;
+peak RSS was 18.895-86.863 MiB and 18.887-87.316 MiB. CPU ranges were
+117.40-126.28% and 117.88-126.54%, while startup ranges were 300.47-323.44 ms
+and 300.45-330.30 ms. These overlap with raw and do not establish a candidate
+ranking.
+
+All 405 error trials returned their expected status, giving every aggregate
+group a 1.0 success rate. Error-path throughput remained effectively tied with
+raw.
+
+### Isolated lookup and growth
+
+The AOT lookup stream used 90% hits, 10% misses, five million lookups per
+iteration, and five iterations.
+
+| Candidate | Routes | Lookups/s | ns/lookup | Source bytes | AOT bytes | Compile ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tree | 10 | 3,692,965 | 270.79 | 3,804 | 6,577,664 | 2,776 |
+| Tree | 100 | 1,653,117 | 604.92 | 41,502 | 6,630,400 | 2,898 |
+| Tree | 1,000 | 589,251 | 1,697.07 | 417,693 | 6,990,336 | 4,524 |
+| Indexed | 10 | 3,143,852 | 318.08 | 5,006 | 6,578,176 | 2,771 |
+| Indexed | 100 | 1,608,910 | 621.54 | 45,716 | 6,631,424 | 2,944 |
+| Indexed | 1,000 | 1,218,332 | 820.79 | 455,022 | 7,044,096 | 6,248 |
+
+Indexed is 2.07 times faster in the distributed 1,000-route lookup, while tree
+is faster at 10 and 100. Tree's 1.70 microsecond large-table lookup is the main
+pathological case, but it did not materially affect the complete HTTP matrix.
+At 1,000 routes, tree has the smaller binary, faster observed compile, and fewer
+source bytes and lines after deterministic formatting.
+
+### Decision
+
+ADR 0003 accepts the segmented tree. It is simpler, met the HTTP budget in
+every group, and has better large-build characteristics. Confidence is
+medium-high for these Windows shapes. The indexed candidate remains useful
+evidence and should be reconsidered if representative full-table HTTP traffic
+or route counts beyond 1,000 make tree lookup time material.

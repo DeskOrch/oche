@@ -230,6 +230,104 @@ deviation aggregates. Its schema is
 The synthetic grouped path shape favors segment partitioning and must not be
 mistaken for a final routing design.
 
+## Phase 1A generated routing kernels
+
+Phase 1A adds two experimental implementations over the same direct `dart:io`
+transport:
+
+- `oche_tree`: generated exact segment-count and nested literal/parameter
+  branches;
+- `oche_indexed`: generated hash switches over literal route skeletons, with
+  full equality guards in every case.
+
+They are internal benchmark programs, not public Oche packages or production
+code generation. Route counts refer to path templates; method variants on one
+path share a template. Generated Dart and all JSON measurements are ignored by
+Git.
+
+Build the raw lower bound and all 10/100/1,000-route AOT programs while
+recording source size, native size, and approximate compile duration:
+
+```powershell
+./tool/build-routing-kernels.ps1
+```
+
+```sh
+sh tool/build-routing-kernels.sh
+```
+
+Each generated executable also runs the deterministic 90%-hit/10%-miss lookup
+experiment. For example:
+
+```console
+./build/routing_kernel/oche_tree_1000.exe --lookup --source=benchmarks/routing_kernel/generated/tree_1000.dart --output=benchmarks/results/phase1a-lookup-tree-1000.json
+```
+
+The complete HTTP suite defaults to AOT, route counts 10/100/1,000,
+concurrency 10/100/500, five iterations, five-second warmup, 30-second
+measurement, and two-second cooldown. Success and error sets are placed in
+separate raw/aggregate result directories. Both implementation order and the
+three-workload order use the same balanced deterministic schedule as Phase
+0.6.
+
+```powershell
+./tool/run-phase1a-windows.ps1 -OhaPath C:\path\to\oha.exe
+```
+
+```sh
+PHASE1A_OHA_PATH=/path/to/oha sh tool/run-phase1a-linux.sh
+```
+
+For a fast harness smoke test without load metrics:
+
+```console
+dart run benchmarks/harness/bin/routing_kernel_suite.dart --mode=aot --route-counts=10 --concurrency-sweep=10 --iterations=1 --warmup=0 --duration=1 --cooldown=0 --load-generator=none
+```
+
+An interrupted suite can reuse complete, configuration-matching raw trials by
+passing the timestamp portion of its existing run as `--suite-run-id`. Every
+candidate file is decoded and checked against the expected workload, schedule,
+benchmark settings, generated-source size/lines, AOT size, and recorded compile
+observation before reuse. SHA-256 fingerprints for the generated source and AOT
+executable make different builds unambiguous; malformed or mismatched files are
+run again. For example:
+
+```console
+dart run benchmarks/harness/bin/routing_kernel_suite.dart --suite-run-id=2026-08-27T23-10-27-951515Z --workload-sets=success
+```
+
+The success set contains a literal, one-parameter, and two-parameter request.
+The error set contains 405 method mismatch, 400 invalid parameter, and 500
+unexpected-handler mapping. Readiness always probes `GET /health`, independently
+of the measured method/status. `successRate` is calculated from the expected
+status-code distribution, so a correct 405 is a successful error-path trial.
+
+Aggregate groups include request method, expected status, route count, and
+workload. `relativeToRaw` compares the matching raw `dart:io` group, while
+`relativeToTenRoutes` reports route-table scaling for the same implementation
+and workload. Generated source bytes/lines and compile duration are retained
+beside the Phase 0.6 runtime metrics.
+
+The recorded native-Windows run completed 405 success trials and 405 error
+trials. Its tracked summary, including the exact run IDs and the selected
+kernel, is in [`results/README.md`](results/README.md). Raw and aggregate JSON
+remain reproducible local artifacts and are intentionally ignored by Git.
+
+The optional middleware invocation experiment is deliberately isolated from
+HTTP and from router selection:
+
+```console
+./build/routing_kernel/middleware_scaling.exe --calls=5000000 --warmup-calls=500000 --iterations=5 --output=benchmarks/results/phase1a-middleware-windows.json
+```
+
+Architecture and URI/security semantics are specified in
+[`../docs/architecture/routing-kernel.md`](../docs/architecture/routing-kernel.md).
+Phase 1A result schemas are:
+
+- [`harness/schema/routing-kernel-build.schema.json`](harness/schema/routing-kernel-build.schema.json)
+- [`harness/schema/routing-kernel-lookup.schema.json`](harness/schema/routing-kernel-lookup.schema.json)
+- [`harness/schema/middleware-scaling-result.schema.json`](harness/schema/middleware-scaling-result.schema.json)
+
 ## Measurement methodology
 
 - **Requests/second and latency:** `oha --no-tui --output-format json`; p50,

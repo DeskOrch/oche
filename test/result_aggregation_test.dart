@@ -91,4 +91,48 @@ void main() {
     expect(latency['percentOfRaw'], 120);
     expect(latency['preferredDirection'], 'lowerIsBetter');
   });
+
+  test(
+    'keeps route counts separate and normalizes against ten routes',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('oche-routes-');
+      addTearDown(() => directory.delete(recursive: true));
+      final paths = <String>[];
+      for (final routeCount in [10, 100, 1000]) {
+        final file = File('${directory.path}/tree-$routeCount.json');
+        await file.writeAsString(
+          jsonEncode({
+            'implementation': 'oche_tree',
+            'mode': 'aot',
+            'host': '127.0.0.1',
+            'endpoint': '/users/42',
+            'requestMethod': 'GET',
+            'expectedStatus': 200,
+            'routeCount': routeCount,
+            'workload': 'single_parameter',
+            'concurrency': 100,
+            'durationSeconds': 30,
+            'warmupSeconds': 5,
+            'loadGenerator': 'oha',
+            'startupMs': 10,
+            'requestsPerSecond': routeCount == 10 ? 1000 : 970,
+            'generatedSourceBytes': routeCount * 100,
+          }),
+        );
+        paths.add(file.path);
+      }
+
+      final aggregate = await aggregateResultFiles(paths);
+      final groups = aggregate['groups'] as List<Map<String, Object>>;
+      expect(groups, hasLength(3));
+      final thousand = groups.singleWhere(
+        (group) => group['routeCount'] == 1000,
+      );
+      final relative = thousand['relativeToTenRoutes'] as Map<String, Object>;
+      final throughput = relative['requestsPerSecond'] as Map<String, Object>;
+      final source = relative['generatedSourceBytes'] as Map<String, Object>;
+      expect(throughput['percentOfRaw'], 97);
+      expect(source['percentOfRaw'], 10000);
+    },
+  );
 }

@@ -18,11 +18,25 @@
   ],
   "properties": {
     "timestampUtc": { "type": "string", "format": "date-time" },
-    "implementation": { "enum": ["raw_dart_io", "relic", "oche_static"] },
+    "implementation": {
+      "enum": [
+        "raw_dart_io",
+        "relic",
+        "oche_static",
+        "oche_tree",
+        "oche_indexed"
+      ]
+    },
     "mode": { "enum": ["jit", "aot"] },
     "host": { "type": "string" },
     "port": { "type": "integer" },
     "endpoint": { "type": "string" },
+    "requestMethod": {
+      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    },
+    "expectedStatus": { "type": "integer", "minimum": 100, "maximum": 599 },
+    "routeCount": { "enum": [10, 100, 1000] },
+    "workload": { "type": "string" },
     "concurrency": { "type": "integer" },
     "durationSeconds": { "type": "integer" },
     "warmupSeconds": { "type": "integer" },
@@ -115,6 +129,17 @@
     },
     "cpuUtilizationPercent": { "type": "number" },
     "binarySizeMb": { "type": "number" },
+    "executableSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "generatedSourceBytes": { "type": "integer", "minimum": 0 },
+    "generatedSourceLines": { "type": "integer", "minimum": 0 },
+    "generatedSourceSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "compileDurationMs": { "type": "number", "minimum": 0 },
     "unavailableMetrics": {
       "type": "array",
       "items": { "type": "string" }

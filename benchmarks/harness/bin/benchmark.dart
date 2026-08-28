@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:oche_benchmark_harness/benchmark_result.dart';
 import 'package:oche_benchmark_harness/benchmark_schedule.dart';
 import 'package:oche_benchmark_harness/environment_metadata.dart';
@@ -48,7 +49,7 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
 
   try {
     await _waitUntilReady(
-      configuration.url,
+      configuration.readinessUrl,
       process,
       startupWatch,
       stdoutText,
@@ -58,7 +59,12 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
 
     final probe = _ProcessProbe(process.pid);
     final idle = await probe.snapshot();
-    await _warmUp(configuration.url, configuration.warmupSeconds);
+    await _warmUp(
+      configuration.url,
+      configuration.warmupSeconds,
+      method: configuration.requestMethod,
+      expectedStatus: configuration.expectedStatus,
+    );
 
     _LoadMetrics? load;
     double? peakLoadRssMb;
@@ -110,6 +116,8 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
         'peakLoadRssMb',
         'cpuUtilizationPercent',
       ]);
+    } else if (load.successRate == null) {
+      unavailable.add('successRate');
     }
     if (idle == null) unavailable.add('idleRssMb');
     if (executableFile == null) unavailable.add('binarySizeMb');
@@ -128,6 +136,14 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
       startupMs: startupWatch.elapsedMicroseconds / 1000,
       environment: environment,
       schedule: configuration.scheduleMetadata,
+      requestMethod: configuration.requestMethod,
+      expectedStatus: configuration.expectedStatus,
+      routeCount: configuration.routeCount,
+      workload: configuration.workload,
+      generatedSourceBytes: configuration.generatedSourceBytes,
+      generatedSourceLines: configuration.generatedSourceLines,
+      generatedSourceSha256: await configuration.generatedSourceSha256,
+      compileDurationMs: configuration.compileDurationMs,
       requestsPerSecond: load?.requestsPerSecond,
       successRate: load?.successRate,
       p50Ms: load?.p50Ms,
@@ -139,6 +155,9 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
       binarySizeMb: executableFile == null
           ? null
           : _bytesToMb(executableFile.lengthSync()),
+      executableSha256: executableFile == null
+          ? null
+          : await _sha256(executableFile),
       unavailableMetrics: unavailable,
     );
   } finally {
@@ -156,6 +175,12 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
     '${configuration.port}',
   ];
   if (configuration.mode == 'jit') {
+    if (configuration.executablePath case final source?) {
+      return (
+        command: Platform.resolvedExecutable,
+        arguments: ['run', source, ...serverArguments],
+      );
+    }
     return (
       command: Platform.resolvedExecutable,
       arguments: [
@@ -223,17 +248,25 @@ Future<void> _waitUntilReady(
   );
 }
 
-Future<void> _warmUp(Uri url, int seconds) async {
+Future<void> _warmUp(
+  Uri url,
+  int seconds, {
+  required String method,
+  required int expectedStatus,
+}) async {
   if (seconds == 0) return;
   final client = HttpClient();
   final watch = Stopwatch()..start();
   try {
     while (watch.elapsed < Duration(seconds: seconds)) {
-      final request = await client.getUrl(url);
+      final request = await client.openUrl(method, url);
       final response = await request.close();
       await response.drain<void>();
-      if (response.statusCode != HttpStatus.ok) {
-        throw StateError('Warmup received HTTP ${response.statusCode}.');
+      if (response.statusCode != expectedStatus) {
+        throw StateError(
+          'Warmup received HTTP ${response.statusCode}; '
+          'expected $expectedStatus.',
+        );
       }
     }
   } finally {
@@ -252,6 +285,8 @@ Future<_LoadMetrics> _runOha(_Configuration configuration) async {
       '${configuration.durationSeconds}s',
       '-c',
       '${configuration.concurrency}',
+      '-m',
+      configuration.requestMethod,
       '${configuration.url}',
     ]);
   } on ProcessException catch (error) {
@@ -274,7 +309,15 @@ Future<_LoadMetrics> _runOha(_Configuration configuration) async {
     if (latency is Map<String, Object?>) {
       return _LoadMetrics(
         requestsPerSecond: _requiredNumber(metrics, 'requests_per_sec'),
-        successRate: _requiredNumber(metrics, 'success_rate'),
+        successRate: _expectedStatusRate(
+          decoded,
+          configuration.expectedStatus,
+          fallback:
+              configuration.expectedStatus >= 200 &&
+                  configuration.expectedStatus < 400
+              ? _requiredNumber(metrics, 'success_rate')
+              : null,
+        ),
         p50Ms: _requiredNumber(latency, 'p50'),
         p95Ms: _requiredNumber(latency, 'p95'),
         p99Ms: _requiredNumber(latency, 'p99'),
@@ -286,11 +329,48 @@ Future<_LoadMetrics> _runOha(_Configuration configuration) async {
   final percentiles = decoded['latencyPercentiles'] as Map<String, Object?>;
   return _LoadMetrics(
     requestsPerSecond: _requiredNumber(summary, 'requestsPerSec'),
-    successRate: _requiredNumber(summary, 'successRate'),
+    successRate: _expectedStatusRate(
+      decoded,
+      configuration.expectedStatus,
+      fallback:
+          configuration.expectedStatus >= 200 &&
+              configuration.expectedStatus < 400
+          ? _requiredNumber(summary, 'successRate')
+          : null,
+    ),
     p50Ms: _requiredNumber(percentiles, 'p50') * 1000,
     p95Ms: _requiredNumber(percentiles, 'p95') * 1000,
     p99Ms: _requiredNumber(percentiles, 'p99') * 1000,
   );
+}
+
+double? _expectedStatusRate(
+  Map<String, Object?> json,
+  int expectedStatus, {
+  required double? fallback,
+}) {
+  final metrics = json['metrics'];
+  final candidates = <Object?>[
+    json['statusCodeDistribution'],
+    json['status_code_distribution'],
+    if (metrics is Map<String, Object?>) ...[
+      metrics['statusCodeDistribution'],
+      metrics['status_code_distribution'],
+    ],
+  ];
+  for (final candidate in candidates) {
+    if (candidate is! Map<String, Object?>) continue;
+    var total = 0.0;
+    var expected = 0.0;
+    for (final entry in candidate.entries) {
+      if (entry.value case final num count) {
+        total += count.toDouble();
+        if (entry.key == '$expectedStatus') expected += count.toDouble();
+      }
+    }
+    if (total > 0) return expected / total;
+  }
+  return fallback;
 }
 
 double _requiredNumber(Map<String, Object?> json, String key) {
@@ -386,7 +466,7 @@ final class _LoadMetrics {
   });
 
   final double requestsPerSecond;
-  final double successRate;
+  final double? successRate;
   final double p50Ms;
   final double p95Ms;
   final double p99Ms;
@@ -408,6 +488,13 @@ final class _Configuration {
     required this.outputPath,
     required this.environmentType,
     required this.scheduleMetadata,
+    required this.requestMethod,
+    required this.expectedStatus,
+    required this.readinessEndpoint,
+    required this.routeCount,
+    required this.workload,
+    required this.generatedSourcePath,
+    required this.compileDurationMs,
   });
 
   final String implementation;
@@ -424,8 +511,25 @@ final class _Configuration {
   final String? outputPath;
   final String? environmentType;
   final Map<String, Object>? scheduleMetadata;
+  final String requestMethod;
+  final int expectedStatus;
+  final String readinessEndpoint;
+  final int? routeCount;
+  final String? workload;
+  final String? generatedSourcePath;
+  final double? compileDurationMs;
 
   Uri get url => Uri.http('$host:$port', endpoint);
+  Uri get readinessUrl => Uri.http('$host:$port', readinessEndpoint);
+  int? get generatedSourceBytes => generatedSourcePath == null
+      ? null
+      : File(generatedSourcePath!).lengthSync();
+  int? get generatedSourceLines => generatedSourcePath == null
+      ? null
+      : File(generatedSourcePath!).readAsLinesSync().length;
+  Future<String?> get generatedSourceSha256 => generatedSourcePath == null
+      ? Future.value()
+      : _sha256(File(generatedSourcePath!));
 
   static _Configuration parse(List<String> arguments) {
     final values = <String, String>{};
@@ -467,6 +571,13 @@ final class _Configuration {
       'endpoint-order',
       'endpoint-position',
       'cooldown',
+      'method',
+      'expected-status',
+      'readiness-endpoint',
+      'route-count',
+      'workload',
+      'generated-source',
+      'compile-duration-ms',
     };
     final unknown = values.keys.where((key) => !known.contains(key)).toList();
     if (unknown.isNotEmpty) {
@@ -477,9 +588,9 @@ final class _Configuration {
       'raw_dart_io' => 'raw_dart_io',
       'relic' => 'relic',
       'oche_static' => 'oche_static',
-      _ => throw FormatException(
-        '--implementation must be raw_dart_io, relic, or oche_static.',
-      ),
+      'oche_tree' => 'oche_tree',
+      'oche_indexed' => 'oche_indexed',
+      _ => throw FormatException('--implementation is not recognized.'),
     };
     final mode = values['mode'] ?? 'jit';
     if (mode != 'jit' && mode != 'aot') {
@@ -495,6 +606,9 @@ final class _Configuration {
     final duration = int.parse(values['duration'] ?? '30');
     final warmup = int.parse(values['warmup'] ?? '5');
     final endpoint = values['endpoint'] ?? '/plaintext';
+    final requestMethod = (values['method'] ?? 'GET').toUpperCase();
+    final expectedStatus = int.parse(values['expected-status'] ?? '200');
+    final readinessEndpoint = values['readiness-endpoint'] ?? endpoint;
     if (port < 1 || port > 65535) {
       throw RangeError.range(port, 1, 65535, 'port');
     }
@@ -503,8 +617,15 @@ final class _Configuration {
         'concurrency and duration must be positive; warmup >= 0.',
       );
     }
-    if (!endpoint.startsWith('/')) {
-      throw FormatException('--endpoint must start with /.');
+    if (!endpoint.startsWith('/') || !readinessEndpoint.startsWith('/')) {
+      throw FormatException('endpoint options must start with /.');
+    }
+    const supportedMethods = {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'};
+    if (!supportedMethods.contains(requestMethod)) {
+      throw FormatException('--method is not supported by this experiment.');
+    }
+    if (expectedStatus < 100 || expectedStatus > 599) {
+      throw RangeError.range(expectedStatus, 100, 599, 'expected-status');
     }
 
     return _Configuration(
@@ -521,6 +642,13 @@ final class _Configuration {
       executablePath: values['executable'],
       outputPath: values['output'],
       environmentType: values['environment-type'],
+      requestMethod: requestMethod,
+      expectedStatus: expectedStatus,
+      readinessEndpoint: readinessEndpoint,
+      routeCount: _optionalInt(values, 'route-count'),
+      workload: values['workload'],
+      generatedSourcePath: values['generated-source'],
+      compileDurationMs: _optionalDouble(values, 'compile-duration-ms'),
       scheduleMetadata: benchmarkScheduleMetadata(
         suiteRunId: values['suite-run-id'],
         iteration: _optionalInt(values, 'iteration'),
@@ -544,3 +672,11 @@ List<String>? _optionalList(Map<String, String> values, String key) {
   final value = values[key];
   return value?.split(',');
 }
+
+double? _optionalDouble(Map<String, String> values, String key) {
+  final value = values[key];
+  return value == null ? null : double.parse(value);
+}
+
+Future<String> _sha256(File file) async =>
+    sha256.bind(file.openRead()).first.then((digest) => digest.toString());

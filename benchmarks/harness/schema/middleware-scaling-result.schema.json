@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche optional middleware invocation scaling result",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "timestampUtc",
+    "runtime",
+    "configuration",
+    "trials"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "oche-middleware-invocation-scaling" },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "runtime": { "type": "string" },
+    "configuration": { "type": "object" },
+    "trials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "strategy",
+          "middlewareCount",
+          "iteration",
+          "calls",
+          "elapsedMicroseconds",
+          "callsPerSecond",
+          "nanosecondsPerCall",
+          "checksum"
+        ],
+        "properties": {
+          "strategy": {
+            "enum": ["generated_direct_chain", "runtime_list_traversal"]
+          },
+          "middlewareCount": { "enum": [0, 1, 5] },
+          "iteration": { "type": "integer", "minimum": 1 },
+          "calls": { "type": "integer", "minimum": 1 },
+          "elapsedMicroseconds": { "type": "integer", "minimum": 0 },
+          "callsPerSecond": { "type": "number", "minimum": 0 },
+          "nanosecondsPerCall": { "type": "number", "minimum": 0 },
+          "checksum": { "type": "integer" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

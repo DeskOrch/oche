@@ -15,6 +15,13 @@ results are summarized in
 [benchmarks/results/README.md](benchmarks/results/README.md); Linux validation is
 still outstanding, so the HTTP-foundation ADR remains Proposed.
 
+Phase 1A adds two internal generated routing-kernel candidates over the same
+`dart:io` transport: segmented tree dispatch and guarded hash-assisted dispatch.
+The Windows AOT evidence selects segmented tree dispatch for the experimental
+kernel; its semantics, source/AOT growth, correctness contract, measured
+trade-offs, and benchmark method are documented in
+[docs/architecture/routing-kernel.md](docs/architecture/routing-kernel.md).
+
 ## Repository map
 
 ```text
@@ -22,6 +29,7 @@ packages/                 Minimal future package boundaries only
 benchmarks/raw_dart_io/   Raw dart:io reference server
 benchmarks/relic/         Equivalent Relic reference server
 benchmarks/oche_static/   Direct static-routing experiment
+benchmarks/routing_kernel/ Generated Phase 1A kernel experiment
 benchmarks/harness/       Process and load-generator harness
 docs/architecture/        Architectural principles
 docs/adr/                 Architecture decision records

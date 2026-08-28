@@ -17,6 +17,14 @@ final class BenchmarkResult {
     required this.startupMs,
     required this.environment,
     this.schedule,
+    this.requestMethod = 'GET',
+    this.expectedStatus = 200,
+    this.routeCount,
+    this.workload,
+    this.generatedSourceBytes,
+    this.generatedSourceLines,
+    this.generatedSourceSha256,
+    this.compileDurationMs,
     this.requestsPerSecond,
     this.successRate,
     this.p50Ms,
@@ -26,6 +34,7 @@ final class BenchmarkResult {
     this.peakLoadRssMb,
     this.cpuUtilizationPercent,
     this.binarySizeMb,
+    this.executableSha256,
     this.unavailableMetrics = const [],
   });
 
@@ -42,6 +51,14 @@ final class BenchmarkResult {
   final double startupMs;
   final Map<String, Object> environment;
   final Map<String, Object>? schedule;
+  final String requestMethod;
+  final int expectedStatus;
+  final int? routeCount;
+  final String? workload;
+  final int? generatedSourceBytes;
+  final int? generatedSourceLines;
+  final String? generatedSourceSha256;
+  final double? compileDurationMs;
   final double? requestsPerSecond;
   final double? successRate;
   final double? p50Ms;
@@ -51,6 +68,7 @@ final class BenchmarkResult {
   final double? peakLoadRssMb;
   final double? cpuUtilizationPercent;
   final double? binarySizeMb;
+  final String? executableSha256;
   final List<String> unavailableMetrics;
 
   /// Encodes only measurements that were actually obtained.
@@ -69,6 +87,14 @@ final class BenchmarkResult {
       'startupMs': startupMs,
       'environment': environment,
       'schedule': ?schedule,
+      'requestMethod': requestMethod,
+      'expectedStatus': expectedStatus,
+      'routeCount': ?routeCount,
+      'workload': ?workload,
+      'generatedSourceBytes': ?generatedSourceBytes,
+      'generatedSourceLines': ?generatedSourceLines,
+      'generatedSourceSha256': ?generatedSourceSha256,
+      'compileDurationMs': ?compileDurationMs,
     };
 
     if (requestsPerSecond case final value?) {
@@ -91,6 +117,9 @@ final class BenchmarkResult {
       json['cpuUtilizationPercent'] = value;
     }
     if (binarySizeMb case final value?) json['binarySizeMb'] = value;
+    if (executableSha256 case final value?) {
+      json['executableSha256'] = value;
+    }
     if (unavailableMetrics.isNotEmpty) {
       json['unavailableMetrics'] = unavailableMetrics;
     }

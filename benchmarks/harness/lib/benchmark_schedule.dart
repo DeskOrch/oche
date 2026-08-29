@@ -30,6 +30,32 @@ List<T> balancedThreeWayOrder<T>(List<T> items, int iteration) {
   return indices.map((index) => items[index]).toList(growable: false);
 }
 
+/// Returns a deterministic position-balanced order for two or more items.
+///
+/// The existing three-way sequence remains byte-for-byte compatible. Other
+/// sizes use forward rotations followed by reverse rotations, so a full
+/// `2 * items.length` cycle places each item in each position twice.
+List<T> balancedOrder<T>(List<T> items, int iteration) {
+  if (items.length == 3) return balancedThreeWayOrder(items, iteration);
+  if (items.length < 2) {
+    throw ArgumentError.value(
+      items,
+      'items',
+      'At least two items are required.',
+    );
+  }
+  if (iteration < 1) {
+    throw RangeError.range(iteration, 1, null, 'iteration');
+  }
+  final cycleIndex = (iteration - 1) % (items.length * 2);
+  final reverse = cycleIndex >= items.length;
+  final rotation = cycleIndex % items.length;
+  return List<T>.generate(items.length, (position) {
+    final offset = reverse ? -position : position;
+    return items[(rotation + offset) % items.length];
+  }, growable: false);
+}
+
 /// Builds the raw-result schedule block, enforcing an all-or-none contract.
 ///
 /// A standalone benchmark has no schedule block. Suite callers must provide
@@ -69,16 +95,22 @@ Map<String, Object>? benchmarkScheduleMetadata({
   if (iteration! < 1 || trialSequence! < 1) {
     throw RangeError('iteration and trial sequence must be positive.');
   }
-  if (implementationPosition! < 1 || implementationPosition > 3) {
+  if (implementationPosition! < 1 ||
+      implementationPosition > implementationOrder.length) {
     throw RangeError.range(
       implementationPosition,
       1,
-      3,
+      implementationOrder.length,
       'implementation-position',
     );
   }
-  if (endpointPosition! < 1 || endpointPosition > 3) {
-    throw RangeError.range(endpointPosition, 1, 3, 'endpoint-position');
+  if (endpointPosition! < 1 || endpointPosition > endpointOrder.length) {
+    throw RangeError.range(
+      endpointPosition,
+      1,
+      endpointOrder.length,
+      'endpoint-position',
+    );
   }
   if (cooldownSeconds! < 0) {
     throw RangeError.range(cooldownSeconds, 0, null, 'cooldown');
@@ -97,8 +129,8 @@ Map<String, Object>? benchmarkScheduleMetadata({
 }
 
 void _validateOrder(String name, List<String> order) {
-  if (order.length != 3 || order.toSet().length != 3) {
-    throw FormatException('--$name must contain three distinct values.');
+  if (order.length < 2 || order.toSet().length != order.length) {
+    throw FormatException('--$name must contain at least two distinct values.');
   }
   if (order.any((value) => value.isEmpty)) {
     throw FormatException('--$name values must not be empty.');

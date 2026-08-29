@@ -37,6 +37,8 @@ const _relativeToTenRoutesMetricDirections = <String, String>{
   'compileDurationMs': 'lowerIsBetter',
 };
 
+const _phase1aImplementation = 'handler_phase1a_direct';
+
 /// Reads raw trial JSON files and returns a grouped aggregate document.
 Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   if (paths.isEmpty) {
@@ -88,8 +90,28 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
 
   final rawByComparison = <String, Map<String, Object>>{};
   for (final entry in aggregateByKey.entries) {
-    if (entry.key.implementation == 'raw_dart_io') {
+    if (entry.key.implementation == 'raw_dart_io' ||
+        entry.key.implementation == 'handler_raw') {
       rawByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+
+  final phase1aByComparison = <String, Map<String, Object>>{};
+  for (final entry in aggregateByKey.entries) {
+    if (entry.key.implementation == _phase1aImplementation) {
+      phase1aByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+  for (final entry in aggregateByKey.entries) {
+    final phase1a = phase1aByComparison[entry.key.comparisonFingerprint];
+    if (phase1a == null) continue;
+    final relative = _relativeMetrics(
+      entry.value,
+      phase1a,
+      _relativeToRawMetricDirections,
+    );
+    if (relative.isNotEmpty) {
+      entry.value['relativeToPhase1ADirect'] = relative;
     }
   }
   for (final entry in aggregateByKey.entries) {

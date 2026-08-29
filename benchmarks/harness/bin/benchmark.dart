@@ -380,8 +380,18 @@ double _requiredNumber(Map<String, Object?> json, String key) {
 }
 
 Future<void> _stopProcess(Process process) async {
-  if (!Platform.isWindows) process.kill(ProcessSignal.sigterm);
-  if (Platform.isWindows) process.kill();
+  if (Platform.isWindows) {
+    process.kill();
+    try {
+      await process.exitCode.timeout(const Duration(milliseconds: 500));
+      return;
+    } on TimeoutException {
+      await Process.run('taskkill.exe', ['/PID', '${process.pid}', '/T', '/F']);
+      await process.exitCode;
+      return;
+    }
+  }
+  process.kill(ProcessSignal.sigterm);
   try {
     await process.exitCode.timeout(const Duration(seconds: 3));
   } on TimeoutException {
@@ -590,6 +600,10 @@ final class _Configuration {
       'oche_static' => 'oche_static',
       'oche_tree' => 'oche_tree',
       'oche_indexed' => 'oche_indexed',
+      'handler_raw' => 'handler_raw',
+      'handler_phase1a_direct' => 'handler_phase1a_direct',
+      'handler_specialized' => 'handler_specialized',
+      'handler_uniform' => 'handler_uniform',
       _ => throw FormatException('--implementation is not recognized.'),
     };
     final mode = values['mode'] ?? 'jit';

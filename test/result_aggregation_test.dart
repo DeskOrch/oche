@@ -135,4 +135,56 @@ void main() {
       expect(source['percentOfRaw'], 10000);
     },
   );
+
+  test(
+    'normalizes Phase 1B candidates against the Phase 1A direct handler',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'oche-handler-relative-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final paths = <String>[];
+      for (final implementation in [
+        'handler_phase1a_direct',
+        'handler_specialized',
+        'handler_uniform',
+      ]) {
+        final file = File('${directory.path}/$implementation.json');
+        await file.writeAsString(
+          jsonEncode({
+            'implementation': implementation,
+            'mode': 'aot',
+            'host': '127.0.0.1',
+            'endpoint': '/users/42',
+            'requestMethod': 'GET',
+            'expectedStatus': 200,
+            'routeCount': 100,
+            'workload': 'single_int_sync',
+            'concurrency': 100,
+            'durationSeconds': 30,
+            'warmupSeconds': 5,
+            'loadGenerator': 'oha',
+            'startupMs': 10,
+            'requestsPerSecond': switch (implementation) {
+              'handler_phase1a_direct' => 1000,
+              'handler_specialized' => 990,
+              _ => 970,
+            },
+            'latency': {'p99Ms': 10},
+          }),
+        );
+        paths.add(file.path);
+      }
+
+      final aggregate = await aggregateResultFiles(paths);
+      final groups = aggregate['groups'] as List<Map<String, Object>>;
+      final specialized = groups.singleWhere(
+        (group) => group['implementation'] == 'handler_specialized',
+      );
+      final relative =
+          specialized['relativeToPhase1ADirect'] as Map<String, Object>;
+      final throughput = relative['requestsPerSecond'] as Map<String, Object>;
+      expect(throughput['percentOfRaw'], 99);
+    },
+  );
 }

@@ -38,6 +38,20 @@ void main() {
     });
   });
 
+  test('four-way cycle gives every item every position twice', () {
+    const items = ['a', 'b', 'c', 'd'];
+    final counts = {for (final item in items) item: List<int>.filled(4, 0)};
+
+    for (var iteration = 1; iteration <= 8; iteration++) {
+      final order = balancedOrder(items, iteration);
+      for (var position = 0; position < order.length; position++) {
+        counts[order[position]]![position]++;
+      }
+    }
+
+    expect(counts.values, everyElement([2, 2, 2, 2]));
+  });
+
   test('schedule metadata requires a complete suite context', () {
     expect(benchmarkScheduleMetadata(), isNull);
     expect(
@@ -91,5 +105,20 @@ void main() {
     );
     expect(() => build(implementationPosition: 4), throwsRangeError);
     expect(() => build(cooldown: -1), throwsRangeError);
+  });
+
+  test('schedule metadata accepts four implementations', () {
+    final metadata = benchmarkScheduleMetadata(
+      suiteRunId: 'phase1b',
+      iteration: 1,
+      trialSequence: 1,
+      implementationOrder: const ['raw', 'direct', 'specialized', 'uniform'],
+      implementationPosition: 4,
+      endpointOrder: const ['one', 'two', 'three'],
+      endpointPosition: 2,
+      cooldownSeconds: 2,
+    );
+
+    expect(metadata!['implementationPosition'], 4);
   });
 }

@@ -1,0 +1,8 @@
+name: handler_execution_benchmark
+description: Internal generated handler-execution experiments for Oche Phase 1B.
+version: 0.0.1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0

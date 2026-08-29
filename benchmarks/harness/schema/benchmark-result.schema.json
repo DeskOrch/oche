@@ -24,7 +24,11 @@
         "relic",
         "oche_static",
         "oche_tree",
-        "oche_indexed"
+        "oche_indexed",
+        "handler_raw",
+        "handler_phase1a_direct",
+        "handler_specialized",
+        "handler_uniform"
       ]
     },
     "mode": { "enum": ["jit", "aot"] },
@@ -84,27 +88,27 @@
         "trialSequence": { "type": "integer", "minimum": 1 },
         "implementationOrder": {
           "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
+          "minItems": 2,
+          "maxItems": 4,
           "uniqueItems": true,
           "items": { "type": "string" }
         },
         "implementationPosition": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 3
+          "maximum": 4
         },
         "endpointOrder": {
           "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
+          "minItems": 2,
+          "maxItems": 4,
           "uniqueItems": true,
           "items": { "type": "string" }
         },
         "endpointPosition": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 3
+          "maximum": 4
         },
         "cooldownSeconds": { "type": "integer", "minimum": 0 }
       },

@@ -16,9 +16,11 @@ workspace:
   - benchmarks/relic
   - benchmarks/oche_static
   - benchmarks/routing_kernel
+  - benchmarks/handler_execution
   - benchmarks/harness
 
 dependencies:
+  handler_execution_benchmark: ^0.0.1
   oche_benchmark_harness: ^0.0.1
   oche_static_benchmark: ^0.0.1
   raw_dart_io_benchmark: ^0.0.1

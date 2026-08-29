@@ -9,4 +9,5 @@ environment:
 
 dependencies:
   crypto: ^3.0.6
+  handler_execution_benchmark: ^0.0.1
   routing_kernel_benchmark: ^0.0.1

@@ -328,6 +328,72 @@ Phase 1A result schemas are:
 - [`harness/schema/routing-kernel-lookup.schema.json`](harness/schema/routing-kernel-lookup.schema.json)
 - [`harness/schema/middleware-scaling-result.schema.json`](harness/schema/middleware-scaling-result.schema.json)
 
+## Phase 1B handler execution
+
+Phase 1B keeps the accepted generated segmented tree and changes only its leaf
+adapter. Four AOT implementations are measured:
+
+- `handler_raw`: hand-written direct `dart:io` lower bound;
+- `handler_phase1a_direct`: generated tree with the Phase 1A-style intermediate
+  response contract;
+- `handler_specialized`: generated, result-type-specific calls and response
+  writes, with no future on synchronous paths;
+- `handler_uniform`: direct typed calls normalized through `FutureOr<Object?>`
+  and an internal response value.
+
+The three generated candidates have an identical dispatch tree. Parameters are
+bound to typed locals before leaf invocation. No candidate uses reflection,
+`Function.apply`, runtime route registration, parameter maps, or a service
+locator. The package is an internal benchmark package and is not exported by
+`package:oche`.
+
+Build all 10/100/1,000-route programs and the microbenchmark:
+
+```powershell
+./tool/build-handler-execution.ps1
+```
+
+```sh
+sh tool/build-handler-execution.sh
+```
+
+Run the complete AOT protocol (five-second warmup, 30-second measurement, five
+iterations, two-second cooldown, and concurrency 10/100/500):
+
+```powershell
+./tool/run-phase1b-windows.ps1 -OhaPath C:\path\to\oha.exe
+```
+
+```sh
+PHASE1B_OHA_PATH=/path/to/oha sh tool/run-phase1b-linux.sh
+```
+
+The default `sync` set contains literal, one-`int`, and two-`int` handlers. The
+`async` set contains an immediately completed future, a deterministic event-loop
+boundary, and an instance method returning a structured result. The optional
+`request` set compares raw `HttpRequest`, a lazy non-copying view, and structured
+result mapping:
+
+```console
+dart run benchmarks/harness/bin/handler_execution_suite.dart --workload-sets=request
+```
+
+Raw JSON, generated sources, and binaries remain ignored. AOT runs can resume
+with the same `--suite-run-id`; JIT trials are deliberately rerun because their
+result record does not fingerprint imported support source. Aggregates normalize
+matching groups both to `handler_raw` and to `handler_phase1a_direct`; the latter
+is the primary Phase 1B budget. AOT reuse requires matching source and executable
+SHA-256 fingerprints.
+
+Schemas:
+
+- [`harness/schema/handler-execution-build.schema.json`](harness/schema/handler-execution-build.schema.json)
+- [`harness/schema/handler-execution-microbenchmark.schema.json`](harness/schema/handler-execution-microbenchmark.schema.json)
+- [`harness/schema/benchmark-result.schema.json`](harness/schema/benchmark-result.schema.json)
+
+The contract and current evidence are in
+[`../docs/architecture/handler-execution.md`](../docs/architecture/handler-execution.md).
+
 ## Measurement methodology
 
 - **Requests/second and latency:** `oha --no-tui --output-format json`; p50,

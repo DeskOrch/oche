@@ -195,3 +195,66 @@ every group, and has better large-build characteristics. Confidence is
 medium-high for these Windows shapes. The indexed candidate remains useful
 evidence and should be reconsidered if representative full-table HTTP traffic
 or route counts beyond 1,000 make tree lookup time material.
+
+## Phase 1B handler-execution results
+
+### Method
+
+The native-Windows AOT screening matrix used the accepted generated segmented
+tree at 10/100/1,000 routes, concurrency 10/100/500, three synchronous
+workloads, four implementations, and five balanced repetitions (540 trials).
+For practical local runtime it used one-second warmup, five-second measurement,
+and no cooldown. The checked-in scripts default to the target 5/30/5/2-second
+protocol. Focused async and request-view matrices used the same abbreviated
+protocol at 100 routes and concurrency 100.
+
+The marginal synchronous group was rerun independently with the full target
+protocol: five-second warmup, 30-second measurement, five repetitions, and
+two-second cooldown. JSON results and build manifests remain ignored by Git.
+
+### Throughput and latency
+
+Across all 27 synchronous groups, specialized averaged 100.79% of the matching
+Phase 1A direct group and 100.41% of raw. Uniform averaged 101.06% and 100.67%.
+The abbreviated specialized ranges were 97.30-110.52% of Phase 1A direct and
+96.36-107.90% of raw. No specialized group missed the 95%-of-raw long-term
+budget.
+
+The full-protocol diagnostic for the one-`int` handler at 100 routes and
+concurrency 500 was:
+
+| Implementation | Requests/s | p50 ms | p95 ms | p99 ms | Peak RSS MiB | Server CPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Raw `dart:io` | 5,972.45 | 85.820 | 99.620 | 107.323 | 84.008 | 121.02% |
+| Phase 1A direct | 6,064.25 | 84.341 | 98.552 | 107.375 | 84.137 | 120.17% |
+| Specialized | 6,007.96 | 84.516 | 100.727 | 112.200 | 83.359 | 119.20% |
+| Uniform | 6,205.16 | 82.893 | 94.616 | 100.303 | 85.145 | 121.33% |
+
+Specialized is 99.07% of Phase 1A direct and 100.59% of raw in this longer
+measurement. Five-trial ranges overlap, so p99 and the apparent uniform lead
+are not treated as architectural differences.
+
+At 100 routes and concurrency 100, specialized was 100.79% of Phase 1A direct
+for the immediately completed future, 100.63% for a real event-loop boundary,
+102.57% for a statically known instance method, 100.06% for raw-request access,
+98.84% for the lazy request view, and 99.57% for structured mapping. Within the
+specialized candidate, the request view reached 99.07% of raw-request
+throughput; results across all candidates did not establish a consistent HTTP
+difference.
+
+### Resources and growth
+
+Specialized synchronous groups used 14.512-14.840 MiB idle RSS,
+18.758-84.000 MiB peak RSS, and 109.21-120.10% server CPU. Uniform ranges were
+14.523-14.832 MiB, 18.676-85.672 MiB, and 109.54-121.30%. They overlap the raw
+and Phase 1A direct ranges.
+
+At 10/100/1,000 routes, specialized AOT executables were
+6.208/6.226/6.529 MiB. Uniform executables were byte-identical; Phase 1A direct
+was 512 bytes larger at each size. Specialized generated
+5,854/35,187/324,978 source bytes, compared with
+6,664/36,048/325,839 for uniform. Raw `dart:io` was 6.207 MiB.
+
+ADR 0004 accepts specialized generated leaf adapters. Detailed allocation
+observations, microbenchmark medians, caveats, and the execution contract are
+in `docs/architecture/handler-execution.md`.

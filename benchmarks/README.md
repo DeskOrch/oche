@@ -394,6 +394,53 @@ Schemas:
 The contract and current evidence are in
 [`../docs/architecture/handler-execution.md`](../docs/architecture/handler-execution.md).
 
+## Phase 1C middleware execution
+
+Phase 1C retains the accepted tree and specialized handler adapter, then
+compares two private middleware kernels: an unrolled generated direct chain and
+an immutable prebuilt runtime traversal. It covers depths 0/1/3/5/10, sync and
+async continuation, mixed pipelines, short-circuit, exact unwind order, error
+positions, lazy/typed state, and statically known instances. It defines no
+public middleware API.
+
+Build 27 AOT artifacts and record source/executable hashes, size, lines, and
+compile observations:
+
+```powershell
+./tool/build-middleware-execution.ps1
+```
+
+```sh
+sh tool/build-middleware-execution.sh
+```
+
+Run the full default Windows or Linux protocol (100 routes, depths 0/1/3/5/10,
+concurrency 10/100/500, 5-second warmup, 30-second measurement, five balanced
+repetitions, and 2-second cooldown):
+
+```powershell
+./tool/run-phase1c-windows.ps1 -OhaPath C:\path\to\oha.exe
+```
+
+```sh
+PHASE1C_OHA_PATH=/path/to/oha sh tool/run-phase1c-linux.sh
+```
+
+Workload sets are `sync`, `async`, `short`, `error`, and `state`. A focused
+suite may select one or more names with `--workloads`; singleton endpoint order
+is valid while implementation order remains balanced. AOT runs with the same
+`--suite-run-id` validate build/source fingerprints and reuse only matching
+complete trials. Raw JSON, generated source, and native binaries are ignored.
+
+Schemas:
+
+- [`harness/schema/middleware-execution-build.schema.json`](harness/schema/middleware-execution-build.schema.json)
+- [`harness/schema/middleware-execution-microbenchmark.schema.json`](harness/schema/middleware-execution-microbenchmark.schema.json)
+- [`harness/schema/benchmark-result.schema.json`](harness/schema/benchmark-result.schema.json)
+
+The contract, Windows evidence, gate miss, and code-growth trade-off are in
+[`../docs/architecture/middleware-execution.md`](../docs/architecture/middleware-execution.md).
+
 ## Measurement methodology
 
 - **Requests/second and latency:** `oha --no-tui --output-format json`; p50,

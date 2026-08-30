@@ -187,4 +187,76 @@ void main() {
       expect(throughput['percentOfRaw'], 99);
     },
   );
+
+  test(
+    'keeps middleware depth separate and normalizes against Phase 1B',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'oche-middleware-relative-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final paths = <String>[];
+      for (final depth in [1, 3]) {
+        for (final implementation in [
+          'middleware_phase1b',
+          'middleware_generated',
+        ]) {
+          final file = File('${directory.path}/$implementation-d$depth.json');
+          await file.writeAsString(
+            jsonEncode({
+              'implementation': implementation,
+              'mode': 'aot',
+              'host': '127.0.0.1',
+              'endpoint': '/users/42',
+              'requestMethod': 'GET',
+              'expectedStatus': 200,
+              'routeCount': 100,
+              'workload': 'single_int_sync',
+              'middlewareDepth': depth,
+              'middlewareProfile': 'sync_continue',
+              'concurrency': 100,
+              'durationSeconds': 30,
+              'warmupSeconds': 5,
+              'loadGenerator': 'oha',
+              'startupMs': 10,
+              'requestsPerSecond': implementation == 'middleware_phase1b'
+                  ? 1000
+                  : depth == 1
+                  ? 985
+                  : 970,
+            }),
+          );
+          paths.add(file.path);
+        }
+      }
+
+      final aggregate = await aggregateResultFiles(paths);
+      final groups = aggregate['groups'] as List<Map<String, Object>>;
+      expect(groups, hasLength(4));
+      final depthOne = groups.singleWhere(
+        (group) =>
+            group['implementation'] == 'middleware_generated' &&
+            group['middlewareDepth'] == 1,
+      );
+      final depthThree = groups.singleWhere(
+        (group) =>
+            group['implementation'] == 'middleware_generated' &&
+            group['middlewareDepth'] == 3,
+      );
+      final depthOneRelative =
+          depthOne['relativeToPhase1BSpecialized'] as Map<String, Object>;
+      final depthThreeRelative =
+          depthThree['relativeToPhase1BSpecialized'] as Map<String, Object>;
+      expect(
+        (depthOneRelative['requestsPerSecond']!
+            as Map<String, Object>)['percentOfRaw'],
+        98.5,
+      );
+      expect(
+        (depthThreeRelative['requestsPerSecond']!
+            as Map<String, Object>)['percentOfRaw'],
+        97,
+      );
+    },
+  );
 }

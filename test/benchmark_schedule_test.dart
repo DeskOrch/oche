@@ -2,6 +2,21 @@ import 'package:oche_benchmark_harness/benchmark_schedule.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('allows a singleton endpoint order in a focused suite', () {
+    final metadata = benchmarkScheduleMetadata(
+      suiteRunId: 'focused',
+      iteration: 1,
+      trialSequence: 1,
+      implementationOrder: const ['raw', 'generated'],
+      implementationPosition: 1,
+      endpointOrder: const ['GET /users/42'],
+      endpointPosition: 1,
+      cooldownSeconds: 2,
+    );
+
+    expect(metadata!['endpointOrder'], ['GET /users/42']);
+  });
+
   test('five-iteration schedule matches the documented balanced rotation', () {
     const implementations = ['raw_dart_io', 'relic', 'oche_static'];
 

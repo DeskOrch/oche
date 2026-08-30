@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche middleware execution AOT build measurements",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "timestampUtc",
+    "platform",
+    "dartVersion",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "oche-middleware-execution-build" },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "platform": { "type": "string" },
+    "dartVersion": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "minItems": 27,
+      "items": {
+        "type": "object",
+        "required": [
+          "implementation",
+          "sourcePath",
+          "sourceSha256",
+          "supportSources",
+          "generatedSourceBytes",
+          "generatedSourceLines",
+          "compileDurationMs",
+          "executablePath",
+          "executableSha256",
+          "executableBytes"
+        ],
+        "properties": {
+          "implementation": { "type": "string" },
+          "routeCount": { "enum": [10, 100, 1000] },
+          "middlewareDepth": { "enum": [0, 1, 3, 5, 10] },
+          "sourcePath": { "type": "string" },
+          "sourceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "supportSources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "generatedSourceBytes": { "type": "integer", "minimum": 1 },
+          "generatedSourceLines": { "type": "integer", "minimum": 1 },
+          "compileDurationMs": { "type": "number", "minimum": 0 },
+          "executablePath": { "type": "string" },
+          "executableSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "executableBytes": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

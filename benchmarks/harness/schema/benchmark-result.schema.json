@@ -28,7 +28,11 @@
         "handler_raw",
         "handler_phase1a_direct",
         "handler_specialized",
-        "handler_uniform"
+        "handler_uniform",
+        "middleware_raw",
+        "middleware_phase1b",
+        "middleware_generated",
+        "middleware_runtime"
       ]
     },
     "mode": { "enum": ["jit", "aot"] },
@@ -41,6 +45,8 @@
     "expectedStatus": { "type": "integer", "minimum": 100, "maximum": 599 },
     "routeCount": { "enum": [10, 100, 1000] },
     "workload": { "type": "string" },
+    "middlewareDepth": { "enum": [0, 1, 3, 5, 10] },
+    "middlewareProfile": { "type": "string" },
     "concurrency": { "type": "integer" },
     "durationSeconds": { "type": "integer" },
     "warmupSeconds": { "type": "integer" },
@@ -100,7 +106,7 @@
         },
         "endpointOrder": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 1,
           "maxItems": 4,
           "uniqueItems": true,
           "items": { "type": "string" }

@@ -21,6 +21,8 @@ final class BenchmarkResult {
     this.expectedStatus = 200,
     this.routeCount,
     this.workload,
+    this.middlewareDepth,
+    this.middlewareProfile,
     this.generatedSourceBytes,
     this.generatedSourceLines,
     this.generatedSourceSha256,
@@ -55,6 +57,8 @@ final class BenchmarkResult {
   final int expectedStatus;
   final int? routeCount;
   final String? workload;
+  final int? middlewareDepth;
+  final String? middlewareProfile;
   final int? generatedSourceBytes;
   final int? generatedSourceLines;
   final String? generatedSourceSha256;
@@ -91,6 +95,8 @@ final class BenchmarkResult {
       'expectedStatus': expectedStatus,
       'routeCount': ?routeCount,
       'workload': ?workload,
+      'middlewareDepth': ?middlewareDepth,
+      'middlewareProfile': ?middlewareProfile,
       'generatedSourceBytes': ?generatedSourceBytes,
       'generatedSourceLines': ?generatedSourceLines,
       'generatedSourceSha256': ?generatedSourceSha256,

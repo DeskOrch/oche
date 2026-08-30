@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Oche middleware execution microbenchmark",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "timestampUtc",
+    "runtime",
+    "platform",
+    "binarySizeBytes",
+    "configuration",
+    "measurements"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "oche-middleware-execution-microbenchmark" },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "runtime": { "type": "string" },
+    "platform": { "type": "string" },
+    "binarySizeBytes": { "type": "integer", "minimum": 1 },
+    "configuration": {
+      "type": "object",
+      "required": [
+        "syncCalls",
+        "warmupCalls",
+        "asyncCalls",
+        "realBoundaryCalls",
+        "iterations"
+      ]
+    },
+    "measurements": {
+      "type": "array",
+      "minItems": 13,
+      "items": {
+        "type": "object",
+        "required": ["name", "trials", "aggregate"]
+      }
+    }
+  },
+  "additionalProperties": false
+}

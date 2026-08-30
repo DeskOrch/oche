@@ -38,6 +38,7 @@ const _relativeToTenRoutesMetricDirections = <String, String>{
 };
 
 const _phase1aImplementation = 'handler_phase1a_direct';
+const _phase1bMiddlewareImplementation = 'middleware_phase1b';
 
 /// Reads raw trial JSON files and returns a grouped aggregate document.
 Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
@@ -91,7 +92,8 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   final rawByComparison = <String, Map<String, Object>>{};
   for (final entry in aggregateByKey.entries) {
     if (entry.key.implementation == 'raw_dart_io' ||
-        entry.key.implementation == 'handler_raw') {
+        entry.key.implementation == 'handler_raw' ||
+        entry.key.implementation == 'middleware_raw') {
       rawByComparison[entry.key.comparisonFingerprint] = entry.value;
     }
   }
@@ -100,6 +102,25 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   for (final entry in aggregateByKey.entries) {
     if (entry.key.implementation == _phase1aImplementation) {
       phase1aByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+
+  final phase1bByComparison = <String, Map<String, Object>>{};
+  for (final entry in aggregateByKey.entries) {
+    if (entry.key.implementation == _phase1bMiddlewareImplementation) {
+      phase1bByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+  for (final entry in aggregateByKey.entries) {
+    final phase1b = phase1bByComparison[entry.key.comparisonFingerprint];
+    if (phase1b == null) continue;
+    final relative = _relativeMetrics(
+      entry.value,
+      phase1b,
+      _relativeToRawMetricDirections,
+    );
+    if (relative.isNotEmpty) {
+      entry.value['relativeToPhase1BSpecialized'] = relative;
     }
   }
   for (final entry in aggregateByKey.entries) {
@@ -217,6 +238,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
     required this.expectedStatus,
     required this.routeCount,
     required this.workload,
+    required this.middlewareDepth,
+    required this.middlewareProfile,
     required this.concurrency,
     required this.durationSeconds,
     required this.warmupSeconds,
@@ -233,6 +256,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
     expectedStatus: _optionalInt(json, 'expectedStatus') ?? 200,
     routeCount: _optionalInt(json, 'routeCount'),
     workload: _optionalString(json, 'workload'),
+    middlewareDepth: _optionalInt(json, 'middlewareDepth'),
+    middlewareProfile: _optionalString(json, 'middlewareProfile'),
     concurrency: _requiredInt(json, 'concurrency'),
     durationSeconds: _requiredInt(json, 'durationSeconds'),
     warmupSeconds: _requiredInt(json, 'warmupSeconds'),
@@ -248,6 +273,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
   final int expectedStatus;
   final int? routeCount;
   final String? workload;
+  final int? middlewareDepth;
+  final String? middlewareProfile;
   final int concurrency;
   final int durationSeconds;
   final int warmupSeconds;
@@ -263,6 +290,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
     'expectedStatus': expectedStatus,
     'routeCount': ?routeCount,
     'workload': ?workload,
+    'middlewareDepth': ?middlewareDepth,
+    'middlewareProfile': ?middlewareProfile,
     'concurrency': concurrency,
     'durationSeconds': durationSeconds,
     'warmupSeconds': warmupSeconds,
@@ -283,6 +312,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
     'expectedStatus': expectedStatus,
     'routeCount': routeCount,
     'workload': workload,
+    'middlewareDepth': middlewareDepth,
+    'middlewareProfile': middlewareProfile,
     'concurrency': concurrency,
     'durationSeconds': durationSeconds,
     'warmupSeconds': warmupSeconds,
@@ -298,6 +329,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
     'requestMethod': requestMethod,
     'expectedStatus': expectedStatus,
     'workload': workload,
+    'middlewareDepth': middlewareDepth,
+    'middlewareProfile': middlewareProfile,
     'concurrency': concurrency,
     'durationSeconds': durationSeconds,
     'warmupSeconds': warmupSeconds,
@@ -316,6 +349,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
       expectedStatus == other.expectedStatus &&
       routeCount == other.routeCount &&
       workload == other.workload &&
+      middlewareDepth == other.middlewareDepth &&
+      middlewareProfile == other.middlewareProfile &&
       concurrency == other.concurrency &&
       durationSeconds == other.durationSeconds &&
       warmupSeconds == other.warmupSeconds &&
@@ -332,6 +367,8 @@ final class _GroupKey implements Comparable<_GroupKey> {
     expectedStatus,
     routeCount,
     workload,
+    middlewareDepth,
+    middlewareProfile,
     concurrency,
     durationSeconds,
     warmupSeconds,

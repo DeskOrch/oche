@@ -140,6 +140,8 @@ Future<BenchmarkResult> _run(_Configuration configuration) async {
       expectedStatus: configuration.expectedStatus,
       routeCount: configuration.routeCount,
       workload: configuration.workload,
+      middlewareDepth: configuration.middlewareDepth,
+      middlewareProfile: configuration.middlewareProfile,
       generatedSourceBytes: configuration.generatedSourceBytes,
       generatedSourceLines: configuration.generatedSourceLines,
       generatedSourceSha256: await configuration.generatedSourceSha256,
@@ -503,6 +505,8 @@ final class _Configuration {
     required this.readinessEndpoint,
     required this.routeCount,
     required this.workload,
+    required this.middlewareDepth,
+    required this.middlewareProfile,
     required this.generatedSourcePath,
     required this.compileDurationMs,
   });
@@ -526,6 +530,8 @@ final class _Configuration {
   final String readinessEndpoint;
   final int? routeCount;
   final String? workload;
+  final int? middlewareDepth;
+  final String? middlewareProfile;
   final String? generatedSourcePath;
   final double? compileDurationMs;
 
@@ -586,6 +592,8 @@ final class _Configuration {
       'readiness-endpoint',
       'route-count',
       'workload',
+      'middleware-depth',
+      'middleware-profile',
       'generated-source',
       'compile-duration-ms',
     };
@@ -604,6 +612,10 @@ final class _Configuration {
       'handler_phase1a_direct' => 'handler_phase1a_direct',
       'handler_specialized' => 'handler_specialized',
       'handler_uniform' => 'handler_uniform',
+      'middleware_raw' => 'middleware_raw',
+      'middleware_phase1b' => 'middleware_phase1b',
+      'middleware_generated' => 'middleware_generated',
+      'middleware_runtime' => 'middleware_runtime',
       _ => throw FormatException('--implementation is not recognized.'),
     };
     final mode = values['mode'] ?? 'jit';
@@ -641,6 +653,11 @@ final class _Configuration {
     if (expectedStatus < 100 || expectedStatus > 599) {
       throw RangeError.range(expectedStatus, 100, 599, 'expected-status');
     }
+    final middlewareDepth = _optionalInt(values, 'middleware-depth');
+    if (middlewareDepth != null &&
+        !const {0, 1, 3, 5, 10}.contains(middlewareDepth)) {
+      throw FormatException('--middleware-depth supports 0, 1, 3, 5, and 10.');
+    }
 
     return _Configuration(
       implementation: implementation,
@@ -661,6 +678,8 @@ final class _Configuration {
       readinessEndpoint: readinessEndpoint,
       routeCount: _optionalInt(values, 'route-count'),
       workload: values['workload'],
+      middlewareDepth: middlewareDepth,
+      middlewareProfile: values['middleware-profile'],
       generatedSourcePath: values['generated-source'],
       compileDurationMs: _optionalDouble(values, 'compile-duration-ms'),
       scheduleMetadata: benchmarkScheduleMetadata(

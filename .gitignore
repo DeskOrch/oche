@@ -9,3 +9,4 @@ benchmarks/results/**/*.json
 /oche-benchmark-results.zip
 benchmarks/routing_kernel/generated/
 benchmarks/handler_execution/generated/
+benchmarks/handler_execution/generated_middleware/

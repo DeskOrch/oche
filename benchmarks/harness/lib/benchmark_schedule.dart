@@ -90,8 +90,8 @@ Map<String, Object>? benchmarkScheduleMetadata({
   if (suiteRunId!.isEmpty) {
     throw const FormatException('--suite-run-id must not be empty.');
   }
-  _validateOrder('implementation-order', implementationOrder!);
-  _validateOrder('endpoint-order', endpointOrder!);
+  _validateOrder('implementation-order', implementationOrder!, minimum: 2);
+  _validateOrder('endpoint-order', endpointOrder!, minimum: 1);
   if (iteration! < 1 || trialSequence! < 1) {
     throw RangeError('iteration and trial sequence must be positive.');
   }
@@ -128,9 +128,11 @@ Map<String, Object>? benchmarkScheduleMetadata({
   };
 }
 
-void _validateOrder(String name, List<String> order) {
-  if (order.length < 2 || order.toSet().length != order.length) {
-    throw FormatException('--$name must contain at least two distinct values.');
+void _validateOrder(String name, List<String> order, {required int minimum}) {
+  if (order.length < minimum || order.toSet().length != order.length) {
+    throw FormatException(
+      '--$name must contain at least $minimum distinct value(s).',
+    );
   }
   if (order.any((value) => value.isEmpty)) {
     throw FormatException('--$name values must not be empty.');

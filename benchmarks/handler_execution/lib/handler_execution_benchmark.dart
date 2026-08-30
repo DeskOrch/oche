@@ -390,12 +390,20 @@ void _writeExpectedError(HttpRequest request) => _writeResponse(
   utf8.encode('{"error":"expected failure"}'),
 );
 
+/// Exposes the accepted error mapping only inside the benchmark package.
+void writeExpectedHandlerError(HttpRequest request) =>
+    _writeExpectedError(request);
+
 void _writeUnexpectedError(HttpRequest request) => _writeResponse(
   request.response,
   HttpStatus.internalServerError,
   ContentType.json,
   utf8.encode('{"error":"internal server error"}'),
 );
+
+/// Exposes the accepted error mapping only inside the benchmark package.
+void writeUnexpectedHandlerError(HttpRequest request) =>
+    _writeUnexpectedError(request);
 
 void _writeResponse(
   HttpResponse response,

@@ -67,4 +67,28 @@ void main() {
     expect(result, containsPair('compileDurationMs', 5000));
     expect(result, containsPair('executableSha256', 'executable-hash'));
   });
+
+  test('serializes middleware execution dimensions when present', () {
+    final result = BenchmarkResult(
+      timestampUtc: DateTime.utc(2026),
+      implementation: 'middleware_generated',
+      mode: 'aot',
+      host: '127.0.0.1',
+      port: 8080,
+      endpoint: '/users/42',
+      concurrency: 100,
+      durationSeconds: 30,
+      warmupSeconds: 5,
+      loadGenerator: 'oha',
+      startupMs: 10,
+      environment: const {},
+      routeCount: 100,
+      workload: 'single_int_sync',
+      middlewareDepth: 3,
+      middlewareProfile: 'sync_continue',
+    ).toJson();
+
+    expect(result, containsPair('middlewareDepth', 3));
+    expect(result, containsPair('middlewareProfile', 'sync_continue'));
+  });
 }

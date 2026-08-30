@@ -258,3 +258,44 @@ was 512 bytes larger at each size. Specialized generated
 ADR 0004 accepts specialized generated leaf adapters. Detailed allocation
 observations, microbenchmark medians, caveats, and the execution contract are
 in `docs/architecture/handler-execution.md`.
+
+## Phase 1C middleware-execution results
+
+### Method and outcome
+
+The primary native-Windows AOT matrix used the representative one-`int` route,
+100 generated routes, depths 1 and 3, concurrency 10/100/500, five-second
+warmup, 30-second measurement, five balanced repetitions, and two-second
+cooldown (120 trials). JSON evidence is ignored by Git; the local run ID is
+`primary-30s`.
+
+Generated direct-chain medians were:
+
+| Depth | Concurrency | Requests/s | vs Phase 1B | vs raw | p50 ms | p95 ms | p99 ms | Peak RSS MiB | CPU |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 10 | 5,424.44 | 96.22% | 100.02% | 1.759 | 2.270 | 2.661 | 18.93 | 121.19% |
+| 1 | 100 | 5,688.55 | 98.48% | 98.62% | 17.187 | 19.385 | 21.771 | 55.49 | 117.40% |
+| 1 | 500 | 5,744.48 | 99.05% | 102.25% | 88.761 | 104.907 | 120.477 | 85.20 | 122.44% |
+| 3 | 10 | 5,420.86 | 97.56% | 98.91% | 1.783 | 2.300 | 2.782 | 18.98 | 121.04% |
+| 3 | 100 | 4,908.47 | 99.11% | 96.71% | 19.204 | 25.133 | 27.811 | 55.66 | 116.98% |
+| 3 | 500 | 5,754.63 | 99.71% | 99.35% | 88.545 | 104.746 | 115.335 | 83.73 | 122.46% |
+
+Depth three passed its 97% incremental target everywhere. Depth one passed its
+98% target at concurrency 100 and 500, but missed at concurrency 10 despite
+matching raw. All complete generated groups remained above 95% of raw. Runtime
+traversal was tied in HTTP throughput.
+
+A separate 300-trial diagnostic depth curve used one-second warmup and three
+measured seconds for depths 0/1/3/5/10. The median generated requests/s across
+the three concurrency medians was 5,365.7/5,402.4/5,374.9/5,622.9/5,444.9.
+Another 102 abbreviated trials covered async/mixed, short-circuit, errors,
+order, state, and instance behavior with every expected status observed.
+
+At 1,000 routes/depth 3, generated direct composition used 1,694.4 KiB source,
+7.562 MiB AOT, and 6.73 seconds observed compile; runtime traversal used 769.5
+KiB, 7.472 MiB, and 5.51 seconds. At 100 routes/depth 10 the corresponding
+source/AOT sizes were 716.3 KiB/6.623 MiB and 78.1 KiB/6.335 MiB.
+
+ADR 0005 therefore remains Proposed, with generated direct composition only the
+provisional lead. Detailed semantics, microbenchmark results, build tables, and
+limitations are in `docs/architecture/middleware-execution.md`.

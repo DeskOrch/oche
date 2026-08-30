@@ -3,10 +3,11 @@ library;
 
 import 'dart:math';
 
-/// Median, extrema, and population standard deviation for repeated samples.
+/// Mean, median, extrema, and population standard deviation for samples.
 final class NumericSummary {
   const NumericSummary({
     required this.sampleCount,
+    required this.mean,
     required this.median,
     required this.minimum,
     required this.maximum,
@@ -14,6 +15,7 @@ final class NumericSummary {
   });
 
   final int sampleCount;
+  final double mean;
   final double median;
   final double minimum;
   final double maximum;
@@ -21,6 +23,7 @@ final class NumericSummary {
 
   Map<String, Object> toJson() => {
     'sampleCount': sampleCount,
+    'mean': mean,
     'median': median,
     'minimum': minimum,
     'maximum': maximum,
@@ -46,6 +49,7 @@ NumericSummary? summarizeNumbers(Iterable<double> values) {
 
   return NumericSummary(
     sampleCount: sorted.length,
+    mean: mean,
     median: median,
     minimum: sorted.first,
     maximum: sorted.last,

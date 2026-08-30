@@ -28,13 +28,13 @@ uniform candidates, typed binding, result/error semantics, controller-instance
 calls, and reproducible AOT method are documented in
 [docs/architecture/handler-execution.md](docs/architecture/handler-execution.md).
 
-Phase 1C evaluates generated direct middleware composition against a prebuilt
-runtime traversal across synchronous, asynchronous, mixed, short-circuit,
-error, state, and instance shapes. Its private execution contract and measured
-source/AOT trade-offs are documented in
+Phases 1C and 1D compare generated direct composition, immutable runtime
+traversal, and a shared closure-free middleware kernel across synchronous,
+asynchronous, mixed, short-circuit, error, state, and instance shapes. ADR 0005
+accepts the shared kernel: it preserves direct typed handler calls and
+generated-like execution cost while materially reducing source and AOT growth.
+The private contract and evidence are documented in
 [docs/architecture/middleware-execution.md](docs/architecture/middleware-execution.md).
-ADR 0005 remains Proposed because one incremental throughput budget missed and
-the deep-chain code-sharing trade-off does not yet have a clear winner.
 
 ## Repository map
 
@@ -44,7 +44,7 @@ benchmarks/raw_dart_io/   Raw dart:io reference server
 benchmarks/relic/         Equivalent Relic reference server
 benchmarks/oche_static/   Direct static-routing experiment
 benchmarks/routing_kernel/ Generated Phase 1A kernel experiment
-benchmarks/handler_execution/ Generated Phase 1B/1C execution experiments
+benchmarks/handler_execution/ Generated Phase 1B/1C/1D execution experiments
 benchmarks/harness/       Process and load-generator harness
 docs/architecture/        Architectural principles
 docs/adr/                 Architecture decision records

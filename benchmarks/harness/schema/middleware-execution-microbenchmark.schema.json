@@ -31,7 +31,7 @@
     },
     "measurements": {
       "type": "array",
-      "minItems": 13,
+      "minItems": 16,
       "items": {
         "type": "object",
         "required": ["name", "trials", "aggregate"]

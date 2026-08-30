@@ -67,6 +67,20 @@ void main() {
     expect(counts.values, everyElement([2, 2, 2, 2]));
   });
 
+  test('five-way ten-iteration cycle balances every implementation', () {
+    const items = ['raw', 'phase1b', 'generated', 'runtime', 'shared'];
+    final counts = {for (final item in items) item: List<int>.filled(5, 0)};
+
+    for (var iteration = 1; iteration <= 10; iteration++) {
+      final order = balancedOrder(items, iteration);
+      for (var position = 0; position < order.length; position++) {
+        counts[order[position]]![position]++;
+      }
+    }
+
+    expect(counts.values, everyElement([2, 2, 2, 2, 2]));
+  });
+
   test('schedule metadata requires a complete suite context', () {
     expect(benchmarkScheduleMetadata(), isNull);
     expect(
@@ -122,18 +136,24 @@ void main() {
     expect(() => build(cooldown: -1), throwsRangeError);
   });
 
-  test('schedule metadata accepts four implementations', () {
+  test('schedule metadata accepts five implementations', () {
     final metadata = benchmarkScheduleMetadata(
       suiteRunId: 'phase1b',
       iteration: 1,
       trialSequence: 1,
-      implementationOrder: const ['raw', 'direct', 'specialized', 'uniform'],
-      implementationPosition: 4,
+      implementationOrder: const [
+        'raw',
+        'phase1b',
+        'generated',
+        'runtime',
+        'shared',
+      ],
+      implementationPosition: 5,
       endpointOrder: const ['one', 'two', 'three'],
       endpointPosition: 2,
       cooldownSeconds: 2,
     );
 
-    expect(metadata!['implementationPosition'], 4);
+    expect(metadata!['implementationPosition'], 5);
   });
 }

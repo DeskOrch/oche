@@ -10,10 +10,12 @@ const _allImplementations = <String>[
   'middleware_phase1b',
   'middleware_generated',
   'middleware_runtime',
+  'middleware_shared',
 ];
 const _middlewareImplementations = <String>[
   'middleware_generated',
   'middleware_runtime',
+  'middleware_shared',
 ];
 
 const _workloadSets = <String, _WorkloadSet>{
@@ -139,6 +141,18 @@ Future<void> main(List<String> arguments) async {
 
   for (final setName in options.workloadSets) {
     final workloadSet = _workloadSets[setName]!;
+    final implementations = workloadSet.implementations
+        .where(
+          (implementation) =>
+              options.implementations.isEmpty ||
+              options.implementations.contains(implementation),
+        )
+        .toList(growable: false);
+    if (implementations.length < 2) {
+      throw StateError(
+        '$setName needs at least two implementations after --implementations.',
+      );
+    }
     final workloads = workloadSet.workloads
         .where(
           (workload) =>
@@ -164,10 +178,10 @@ Future<void> main(List<String> arguments) async {
         options.concurrencies.length *
         options.iterations *
         workloads.length *
-        workloadSet.implementations.length;
+        implementations.length;
     final suiteRunId = '$timestamp-$setName';
     final resultsDirectory = Directory(
-      '${options.resultsDirectory}/phase1c-$suiteRunId',
+      '${options.resultsDirectory}/phase1d-$suiteRunId',
     );
     await resultsDirectory.create(recursive: true);
 
@@ -180,7 +194,7 @@ Future<void> main(List<String> arguments) async {
             iteration++
           ) {
             final implementationOrder = balancedOrder(
-              workloadSet.implementations,
+              implementations,
               iteration,
             );
             final workloadOrder = workloads.length == 1
@@ -301,7 +315,7 @@ Future<void> main(List<String> arguments) async {
 
     final aggregate = await aggregateResultFiles(trialFiles);
     final aggregateFile = File(
-      '${resultsDirectory.path}/phase1c-$suiteRunId-aggregate.json',
+      '${resultsDirectory.path}/phase1d-$suiteRunId-aggregate.json',
     );
     await aggregateFile.writeAsString(
       '${const JsonEncoder.withIndent('  ').convert(aggregate)}\n',
@@ -387,7 +401,7 @@ _BuildEntries _readBuildEntries(_SuiteOptions options) {
   final manifest = File(options.buildManifestPath);
   if (!manifest.existsSync()) {
     throw StateError(
-      'Build manifest not found: ${manifest.path}. Run the Phase 1C build first.',
+      'Build manifest not found: ${manifest.path}. Run the Phase 1D build first.',
     );
   }
   final decoded = jsonDecode(manifest.readAsStringSync());
@@ -448,6 +462,7 @@ final class _BuildEntries {
         'middleware_phase1b' => 'phase1b',
         'middleware_generated' => 'generated',
         'middleware_runtime' => 'runtime',
+        'middleware_shared' => 'shared',
         _ => null,
       };
       final sourcePath = stem == null
@@ -583,6 +598,7 @@ final class _SuiteOptions {
     required this.environmentType,
     required this.workloadSets,
     required this.workloads,
+    required this.implementations,
     required this.buildManifestPath,
     required this.suiteRunId,
   });
@@ -603,6 +619,7 @@ final class _SuiteOptions {
   final String? environmentType;
   final List<String> workloadSets;
   final Set<String> workloads;
+  final Set<String> implementations;
   final String buildManifestPath;
   final String? suiteRunId;
 
@@ -639,6 +656,7 @@ final class _SuiteOptions {
       'environment-type',
       'workload-sets',
       'workloads',
+      'implementations',
       'build-manifest',
       'suite-run-id',
     };
@@ -679,6 +697,21 @@ final class _SuiteOptions {
         workloadSets.any((value) => !_workloadSets.containsKey(value))) {
       throw FormatException(
         '--workload-sets supports sync, async, short, error, and state.',
+      );
+    }
+    final implementations = (values['implementations'] ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    if (implementations.isNotEmpty &&
+        (implementations.length < 2 ||
+            implementations.any(
+              (implementation) => !_allImplementations.contains(implementation),
+            ))) {
+      throw FormatException(
+        '--implementations needs at least two values drawn from '
+        '${_allImplementations.join(', ')}.',
       );
     }
     final concurrencies = _integerList(
@@ -728,9 +761,10 @@ final class _SuiteOptions {
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty)
           .toSet(),
+      implementations: implementations,
       buildManifestPath:
           values['build-manifest'] ??
-          'benchmarks/results/phase1c-build-${Platform.operatingSystem}.json',
+          'benchmarks/results/phase1d-build-${Platform.operatingSystem}.json',
       suiteRunId: suiteRunId,
     );
   }

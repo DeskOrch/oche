@@ -2,235 +2,254 @@
 
 ## Scope
 
-Phase 1C evaluates the private execution interval between the accepted
+Phases 1C and 1D evaluate the private execution interval between the accepted
 segmented routing tree (ADR 0003) and specialized typed handler adapter (ADR
-0004). It does not define a public middleware interface, context, dependency
-injection, annotations, or `Oche.use`. Everything under
+0004). They do not define a public middleware interface, request context,
+dependency injection, annotations, or `Oche.use`. Everything under
 `benchmarks/handler_execution` remains benchmark-only.
 
-The experimental request path is:
+The accepted experimental request path is:
 
 ```text
 dart:io HttpRequest
   -> generated segmented route tree
   -> generated typed parameter locals
-  -> compile-time-known middleware pipeline
-  -> specialized handler call
+  -> compile-time-known shared middleware kernel
+  -> direct specialized handler call
   -> specialized result/error mapping
   -> dart:io HttpResponse
 ```
 
-The tree, binding, handler, and response semantics are identical between the
-middleware candidates. Raw `HttpRequest` remains directly available. No
-parameter map, dynamic argument list, reflection, runtime registration, service
-locator, or public Oche API was introduced.
+Raw `HttpRequest` remains directly available. There is no parameter map,
+dynamic argument list, reflection, runtime registration, service locator, or
+public Oche API.
 
 ## Compared execution models
 
-### Generated direct chain
+### A: generated direct chain
 
-Each generated leaf emits direct calls for every known middleware step. The
-primary synchronous leaf is closure-free and stays synchronous. A depth-three
-pipeline is structurally equivalent to:
+Each generated leaf emits calls for every known middleware step. Its primary
+sync path is closure-free and fast, but executor source grows with routes times
+middleware depth.
 
-```text
-M0.before -> M1.before -> M2.before -> handler
-                                  -> M2.after -> M1.after -> M0.after
+### B: immutable runtime traversal
+
+One immutable typed step list is built at startup and walked per request. No
+list is constructed per request, but each leaf passes a typed handler closure
+to loop-based shared machinery. It minimizes duplicated executor source at the
+cost of loop/index/closure machinery in the sync path.
+
+### C: shared closure-free kernel
+
+The selected model separates middleware entry and exit from handler execution.
+Generated route code identifies a depth-specialized shared kernel, calls the
+handler itself with typed locals, and then invokes the matching unwind helper:
+
+```dart
+if (!enterSharedSyncPipeline3(request, profile)) {
+  writeMiddlewareUnauthorized(request);
+  return;
+}
+final result = middlewareTwoIntHandler(userId, orderId);
+exitSharedSyncPipeline3(request, profile);
 ```
 
-The generator can flatten future global, group, and route scopes into this
-single chain at build time. It never merges middleware lists per request.
+Sync helpers for depths 1, 3, 5, and 10 exist once in support code rather than
+once per route. The primary request path passes no handler, closure, middleware
+list, dynamic argument collection, context wrapper, or intermediate response
+object to the kernel. Source inspection establishes those properties; it does
+not justify a claim of zero allocations for the complete Dart HTTP stack.
 
-### Prebuilt runtime traversal
-
-The fair runtime candidate constructs one immutable typed step list at startup
-and walks it for each request. Typed route arguments remain locals, and no
-middleware list is allocated or merged per request. The leaf supplies a typed
-handler closure to shared traversal machinery. This candidate centralizes
-unwind behavior and shares more generated source, but adds loop/index/closure
-machinery to the synchronous path.
+Generated source contains route dispatch, typed binding, the selected pipeline
+identity, and the direct handler connection. Global, controller/group, and
+route scopes are flattened into that identity at compile time. There is no
+runtime scope merge.
 
 ### Baselines
 
 `middleware_raw` is the hand-written `dart:io` lower bound.
-`middleware_phase1b` is the accepted segmented tree plus specialized handler
-adapter with zero middleware and is the primary 100% normalization. Generated
-depth zero is an additional control.
+`middleware_phase1b` is the accepted segmented tree and specialized handler
+adapter with zero middleware and is the incremental 100% normalization.
 
 ## Execution contract
 
 ### Synchronous pipelines
 
-A synchronous middleware returns `proceed` or `unauthorized` directly. The
-generated path does not become `async`, construct a future, or allocate a
-request wrapper merely because middleware exists. A successful handler result
-is written only after all entered after-hooks finish.
+A sync pipeline remains sync. Depths 1, 3, and 5 use bounded specialized
+enter/exit helpers; depth 10 composes the depth-5 helper with a small loop for
+the stress-only tail. The handler remains outside the helper and is invoked
+directly. No `Future` is introduced merely because sync middleware exists.
 
 ### Asynchronous and mixed pipelines
 
-Async routes enter an explicit typed async executor. A middleware step is
-awaited only when its compile-time profile is async. Mixed pipelines alternate
-sync and async steps without forcing the sync middleware implementation through
-`Future.sync` or `Future.value`. The experiment distinguishes immediately
-completed futures from one real `Duration.zero` event-loop boundary.
+Candidate C emits one application-level async connector rather than a unique
+executor per route or per parameter shape. A sync-middleware/async-handler
+profile uses the sync enter/exit helper around a direct awaited typed handler.
+Profiles with genuine async middleware use one shared async enter/exit loop;
+only statically known async steps are awaited. The connector selects the two
+known handler boundary shapes directly and never receives a callback.
 
-### Short-circuit
+This avoids both universal dynamic invocation and a combinatorial executor for
+every sync/async sequence. A future generator may add another shared shape only
+when a measured application needs one.
 
-The first middleware may return `unauthorized` synchronously or asynchronously.
-The executor then unwinds only already-entered outer steps, writes exactly one
-401 JSON response, and does not invoke downstream middleware or the handler.
-Correctness tests assert the exact body and an invocation count of zero. This
-is the required foundation for future authorization and rate-limiting
-middleware.
+### Short-circuit and ordering
 
-### Before/after ordering
-
-Before-hooks execute in declaration order and after-hooks in reverse order.
-For depth three the exact trace is:
+An unauthorized decision stops later middleware and the handler, unwinds only
+successfully entered outer steps, and writes one 401 JSON response. Before
+hooks run in declaration order and after hooks in reverse order:
 
 ```text
 M0.before,M1.before,M2.before,handler,M2.after,M1.after,M0.after
 ```
 
-Generated and runtime traversal candidates produce the same trace.
-
 ### Errors and response ownership
 
-Throws in a sync `before`, the handler, or a sync `after` reach the existing
-synchronous dispatch boundary. Throws after an `await` are caught by the async
-response executor. Expected application failure remains 409; all unexpected
-middleware/handler failures become the fixed 500 JSON body. Exception messages
-are never returned. Response mapping happens after successful unwind, so a
-failing after-hook cannot follow an already-closed success response.
-As modeled here, pending after-hooks run after a successful handler or when an
-inner step short-circuits; an uncaught handler/before/after exception stops the
-remaining chain. A future public contract could opt into `finally` semantics,
-but this phase does not silently impose them.
+Expected application failure remains 409. Invalid parameters, unknown routes,
+and wrong methods remain 400, 404, and 405 with `Allow`. Unexpected failures
+from sync/async before, handler, or after positions become the fixed generic
+500 JSON body; exception details and stack traces are not returned.
 
-## State, composition, and instances
+Pending after hooks run after success and for entered outer steps during a
+short-circuit. As in Phase 1C, an uncaught handler/before/after exception stops
+the remaining chain rather than silently imposing `finally` semantics.
 
-The normal pipeline creates no request-state container. The lazy experiment
-allocates its `Map<Object, Object?>` only on the route that writes state. The
-typed experiment constructs a generated-shaped holder with a direct `int`
-field. HTTP results do not establish a stable speed ranking between these tiny
-routes, so the architectural finding is pay-for-use: do not allocate a generic
-state map unconditionally, and allow generated typed state when a future
-feature can know its shape.
+### State and instances
 
-The first three generated steps emulate global, group, and route middleware.
-They are flattened before runtime. A statically constructed middleware
-instance is called directly; no lookup or dependency injection occurs. Its
-three-trial HTTP result overlaps top-level middleware and exposes no
-architectural blocker.
+The normal path allocates no request-state container. The lazy experiment
+allocates its map only when state is written, while the typed experiment uses a
+direct generated-shaped field. A statically constructed middleware instance is
+called directly with no lookup or dependency injection.
 
-The boundary can later host logging, metrics, tracing, request timing,
-authentication, and rate limiting: it sees raw request data, brackets handler
-execution, supports async work and reliable early exit, and owns a deterministic
-error/unwind interval. Those features and their public APIs remain out of
-scope.
+## Native Windows AOT evidence
 
-## Windows AOT evidence
+The host was Windows 11 Pro build 26200, Intel Xeon E5-2680 v4, 28 logical
+CPUs, Dart 3.13.1 AOT, one server isolate, and `oha` 1.16.0 on loopback. Unless
+stated otherwise, runs used 5 seconds warmup, 30 seconds measurement, 2 seconds
+cooldown, a deterministic position-balanced order, and retained raw JSON
+trials under the Git-ignored results directory.
 
-The development host was native Windows 11 Pro build 26200 on an Intel Xeon
-E5-2680 v4, with 28 logical CPUs, Dart 3.13.1 AOT, one server isolate, and
-`oha` 1.16.0 on loopback. JSON results are local and ignored by Git.
+### Critical d1 / concurrency 10 repeat
 
-### Primary representative route
+The representative `GET /users/42`, 100-route group used ten repetitions and
+five implementations (raw was retained as an extra lower-bound reference):
 
-The authoritative representative `GET /users/42` matrix used 100 routes,
-concurrency 10/100/500, five seconds warmup, 30 seconds measured, five balanced
-repetitions, and two seconds cooldown: 120 trials. The table contains generated
-direct-chain medians.
+| Implementation | req/s median | mean | min | max | stddev | p50 ms | p95 ms | p99 ms | Peak RSS MiB | CPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Phase 1B | 5,381.81 | 5,359.92 | 4,986.09 | 5,704.76 | 221.08 | 1.790 | 2.282 | 2.627 | 18.94 | 122.77% |
+| Generated A | 5,495.22 | 5,492.78 | 5,090.56 | 5,825.61 | 208.49 | 1.756 | 2.239 | 2.579 | 18.93 | 122.25% |
+| Runtime B | 5,489.07 | 5,418.18 | 5,112.84 | 5,704.13 | 194.41 | 1.750 | 2.243 | 2.673 | 18.97 | 122.85% |
+| Shared C | 5,492.26 | 5,468.85 | 5,092.91 | 5,693.67 | 189.88 | 1.738 | 2.290 | 2.670 | 18.95 | 123.03% |
+| Raw | 5,476.67 | 5,447.13 | 5,130.17 | 5,719.49 | 199.00 | 1.752 | 2.242 | 2.596 | 18.79 | 122.87% |
 
-| Depth | Concurrency | Requests/s | vs Phase 1B | vs raw | p50 ms | p95 ms | p99 ms | Peak RSS MiB | CPU |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 10 | 5,424.44 | 96.22% | 100.02% | 1.759 | 2.270 | 2.661 | 18.93 | 121.19% |
-| 1 | 100 | 5,688.55 | 98.48% | 98.62% | 17.187 | 19.385 | 21.771 | 55.49 | 117.40% |
-| 1 | 500 | 5,744.48 | 99.05% | 102.25% | 88.761 | 104.907 | 120.477 | 85.20 | 122.44% |
-| 3 | 10 | 5,420.86 | 97.56% | 98.91% | 1.783 | 2.300 | 2.782 | 18.98 | 121.04% |
-| 3 | 100 | 4,908.47 | 99.11% | 96.71% | 19.204 | 25.133 | 27.811 | 55.66 | 116.98% |
-| 3 | 500 | 5,754.63 | 99.71% | 99.35% | 88.545 | 104.746 | 115.335 | 83.73 | 122.46% |
+Candidate C was 102.05% of Phase 1B and 100.29% of raw. The earlier Phase 1C
+generated result of 96.22% at this exact group was noise rather than a stable
+kernel penalty: all A/B/C candidates exceeded Phase 1B in the ten-trial repeat.
 
-Idle RSS was 14.65-14.71 MiB. Generated and runtime traversal medians overlap:
-runtime was between 96.04% and 100.81% of Phase 1B, while generated was between
-96.22% and 99.71%. Neither is an end-to-end throughput winner.
+### Production depth/concurrency matrix
 
-Depth three meets its 97% Phase 1B target at every concurrency. Depth one meets
-the 98% target at concurrency 100 and 500 but reaches only 96.22% at concurrency
-10. That miss is not hidden even though generated is 100.02% of raw in the same
-group. Every generated d1/d3 group remains above the complete-runtime budget of
-95% of raw.
+Candidate C and Phase 1B were measured in five paired repetitions for depths
+0/1/3/5 and concurrency 10/100/500:
 
-### Depth curve and behavior profiles
+| Depth | c | C req/s | C vs 1B | p50 ms | p95 ms | p99 ms | Peak RSS MiB | CPU |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 10 | 5,798.22 | 101.12% | 1.676 | 2.022 | 2.322 | 18.94 | 124.23% |
+| 0 | 100 | 5,749.61 | 102.22% | 17.025 | 19.588 | 21.521 | 55.48 | 121.94% |
+| 0 | 500 | 6,070.23 | 99.84% | 84.616 | 98.210 | 107.196 | 84.15 | 124.01% |
+| 1 | 10 | 5,775.93 | 100.02% | 1.679 | 2.050 | 2.376 | 18.96 | 123.97% |
+| 1 | 100 | 5,324.40 | 95.16% | 18.073 | 22.856 | 25.794 | 55.51 | 119.36% |
+| 1 | 500 | 5,578.63 | 101.29% | 89.667 | 119.921 | 144.457 | 84.08 | 123.27% |
+| 3 | 10 | 5,766.01 | 99.58% | 1.684 | 2.037 | 2.341 | 18.96 | 124.62% |
+| 3 | 100 | 5,801.75 | 100.22% | 16.934 | 19.084 | 21.300 | 55.28 | 123.75% |
+| 3 | 500 | 6,182.05 | 99.63% | 83.046 | 95.385 | 101.365 | 87.06 | 125.63% |
+| 5 | 10 | 5,182.47 | 102.52% | 1.861 | 2.442 | 2.906 | 18.96 | 121.68% |
+| 5 | 100 | 5,362.10 | 105.83% | 18.077 | 22.571 | 27.062 | 55.20 | 120.95% |
+| 5 | 500 | 5,933.99 | 103.30% | 85.806 | 103.588 | 114.029 | 84.12 | 123.40% |
 
-A separate diagnostic sweep used one second warmup, three seconds measured,
-five repetitions, and no cooldown for depths 0/1/3/5/10. Its generated medians
-across the three concurrency-specific medians were 5,365.7, 5,402.4, 5,374.9,
-5,622.9, and 5,444.9 requests/s. Their median within-concurrency ratios to depth
-zero were 100.0%, 101.7%, 97.9%, 102.8%, and 101.9%. The non-monotonic result
-shows loopback/system noise dominates these tiny middleware costs; this short
-sweep is not an acceptance gate. At concurrency 500 its p99 values were also
-load-generator-saturated (about 649-738 ms), reinforcing that limitation.
+d3 passed its 97% incremental target at every concurrency. d1 passed at c10
+and c500 but missed at c100. A focused ten-repetition d1/c100 run confirmed
+95.24% of Phase 1B; however Phase 1B was itself 103.84% of raw, while Candidate
+C remained 98.90% of raw. The isolated d1 cost was indistinguishable from A,
+so this single incremental miss is recorded rather than used to overfit the
+kernel.
 
-Three-trial, one-second profile diagnostics at depth three covered sync-handler
-plus sync middleware, async-handler plus sync middleware, all-async middleware,
-mixed real-boundary execution, sync/async short-circuit, four error positions,
-order, no/lazy/typed state, and instance middleware. All success groups returned
-200, short-circuits returned 401, and errors returned 500 with success rate 1.0.
-They are correctness-under-load evidence, not performance gates.
+A separate contemporaneous raw/C d3 run measured C at 99.81%, 102.89%, and
+101.75% of raw for c10/c100/c500. The complete-stack 95% budget therefore
+passes at all production concurrencies.
+
+### 1,000 routes / depth 3
+
+Five HTTP repetitions at concurrency 100 produced:
+
+| Implementation | req/s | vs 1B | vs raw | p50/p95/p99 ms | Peak RSS MiB | CPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Generated A | 5,243.91 | 97.90% | 99.01% | 18.413 / 23.155 / 26.223 | 56.68 | 120.92% |
+| Runtime B | 5,504.67 | 102.77% | 103.94% | 17.470 / 22.067 / 25.297 | 57.05 | 121.40% |
+| Shared C | 5,453.54 | 101.82% | 102.97% | 17.724 / 21.678 / 25.113 | 56.34 | 122.96% |
+
+The final AOT build measurements were:
+
+| Candidate | Source bytes | Lines | AOT bytes | Compile s |
+| --- | ---: | ---: | ---: | ---: |
+| Generated A | 1,764,694 | 54,795 | 7,929,344 | 6.822 |
+| Runtime B | 817,702 | 28,747 | 7,834,624 | 5.450 |
+| Shared C | 829,694 | 27,744 | 7,505,408 | 5.170 |
+
+Candidate C source is 47.02% of A and 101.47% of B. Its AOT binary is 94.65%
+of A and 95.80% of B. Its observed compile time is 75.78% of A and 94.87% of
+B. It is materially closer to B than A in source growth while winning the
+measured binary and compile dimensions.
+
+At 100 routes, C d1/d3/d5 executables were all exactly 6,595,584 bytes; d0 was
+6,575,104 and d10 was 6,596,096. This is practical evidence that unused depth
+helpers do not materially survive AOT tree shaking, but it is not a symbol-level
+proof and no custom binary analyzer was built.
 
 ## Isolated AOT microbenchmark
 
-Five-trial medians were:
+Each case ran five trials with observable checksums:
 
-| Case | ns/call |
-| --- | ---: |
-| Direct handler | 1.406 |
-| Generated depth 1 / 3 / 5 | 2.238 / 5.647 / 10.293 |
-| Runtime depth 1 / 3 / 5 | 8.380 / 15.905 / 26.458 |
-| Generated/runtime short-circuit d3 | 1.619 / 5.768 |
-| Generated before/after d3 | 5.736 |
-| Sync middleware + async handler | 218.928 |
-| Async middleware | 1,381.436 |
-| Mixed real event-loop boundary | 14,553.9 |
+| Case | ns/call mean | median | min | max | stddev |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct handler | 1.393 | 1.389 | 1.389 | 1.401 | 0.005 |
+| Generated d1 | 2.199 | 2.189 | 2.182 | 2.250 | 0.026 |
+| Generated d3 | 5.770 | 5.758 | 5.734 | 5.830 | 0.032 |
+| Runtime d1 | 9.443 | 9.516 | 9.303 | 9.561 | 0.114 |
+| Runtime d3 | 17.389 | 17.268 | 17.113 | 18.027 | 0.329 |
+| Shared d1 | 2.173 | 2.179 | 2.133 | 2.209 | 0.027 |
+| Shared d3 | 5.739 | 5.735 | 5.691 | 5.794 | 0.033 |
+| Shared d5 | 14.163 | 14.244 | 13.823 | 14.338 | 0.186 |
 
-Each loop carries an observable checksum. AOT can still inline and
-devirtualize tiny code, so these values explain local machinery but do not
-select the architecture; the HTTP matrix remains authoritative.
+AOT may inline and devirtualize these tiny helpers. The result establishes that
+C does not carry B's local traversal overhead and is indistinguishable from A
+at d1/d3; HTTP remains authoritative.
 
-## Source, binary, and compilation growth
+## Maintainability comparison
 
-Representative single AOT builds were:
+| Concern | Generated A | Runtime B | Shared C |
+| --- | --- | --- | --- |
+| Generated code | Highest; routes × depth | Low, closure adapter per route | Low; pipeline identity per route |
+| Shared runtime code | Minimal | One list traversal | Bounded depth helpers plus one async loop |
+| Debugging/stacks | Explicit but very large | Central, includes closure/loop frames | Central enter/exit frames; direct handler frame retained |
+| Sync complexity | Simple unrolled calls | Loop plus handler closure | Simple bounded helper calls |
+| Async complexity | Generated per profile | One universal traversal | One connector and shared async boundary loop |
+| Codegen complexity | Highest | Moderate | Moderate; depth name and direct handler connection |
+| Binary behavior | Grows with deep replication | Stable but retains adapters | Best measured size; practical tree shaking |
+| Extensibility | New shapes can duplicate code | Most runtime-flexible | Add measured shared shapes without erasing types |
 
-| Candidate | Routes | Depth | Source KiB | Lines | AOT MiB | Compile s |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Generated | 10 | 0 / 1 / 3 | 7.9 / 11.2 / 20.3 | 301 / 409 / 664 | 6.208 / 6.209 / 6.210 | 3.14 / 2.91 / 2.99 |
-| Generated | 100 | 0 / 1 / 3 | 57.7 / 88.0 / 172.4 | 1,813 / 2,911 / 5,416 | 6.271 / 6.290 / 6.341 | 3.10 / 3.15 / 3.28 |
-| Generated | 1,000 | 0 / 1 / 3 | 556.6 / 857.6 / 1,694.4 | 16,813 / 27,811 / 52,816 | 7.030 / 7.158 / 7.562 | 4.92 / 5.38 / 6.73 |
-| Runtime | 10 | 0 / 1 / 3 | 9.1 / 9.1 / 9.1 | 355 | 6.211 | 2.84-2.92 |
-| Runtime | 100 | 0 / 1 / 3 | 78.1 / 78.1 / 78.1 | 2,767 | 6.335 | 3.09-3.12 |
-| Runtime | 1,000 | 0 / 1 / 3 | 769.5 / 769.5 / 769.5 | 26,767 | 7.471-7.472 | 5.44-5.51 |
+C is the lowest-complexity design that retains A's closure-free typed fast
+path while achieving B-like source growth. B remains useful as a diagnostic,
+not as the selected production direction.
 
-At 100 routes, generated depth 5 and 10 grew to 288.4 and 716.3 KiB of
-source, 6.395 and 6.623 MiB AOT, and 3.56 and 4.61 seconds compile. Runtime
-remained 78.1 KiB, 6.335 MiB, and about 3.1 seconds because the step list is
-shared. At 1,000 routes/depth 3, sharing removes about 925 KiB of source and
-1.22 seconds of observed compile time, but only about 90 KiB from the AOT
-binary. Conversely runtime is larger at shallow 1,000-route depths because its
-per-leaf closure machinery remains present.
+## Decision and remaining risks
 
-Full direct flattening is therefore source-expensive but did not cause
-pathological AOT growth in the measured shapes. A shared or hybrid kernel may
-be attractive for deep pipelines, but an arbitrary depth threshold is not yet
-justified.
+ADR 0005 accepts Candidate C, the shared closure-free kernel. Confidence is
+high for the internal execution boundary: correctness is exhaustive for the
+modeled semantics, AOT diagnostics explain the local cost, and the decisive
+1,000-route experiment covers throughput and growth together.
 
-## Current conclusion
-
-Generated direct composition remains the provisional lead because it preserves
-the simplest closure-free synchronous contract, makes early exit and unwind
-explicit, and keeps the measured complete runtime above 95% of raw. Runtime
-traversal remains credible and wins source/compile growth for deep chains while
-remaining tied in HTTP throughput. Because depth-one missed its incremental
-budget at concurrency 10 and the code-size/runtime trade-off has no clear
-winner, ADR 0005 remains Proposed. No public middleware contract follows from
-this experiment.
+Remaining risks belong to the future public design rather than another kernel
+phase: defining middleware types and response ownership, controlling the
+number of async shape specializations, preserving useful stack traces with
+real application middleware, deciding cancellation/streaming behavior, and
+validating the HTTP foundation on native Linux. ADR 0002 remains Proposed.

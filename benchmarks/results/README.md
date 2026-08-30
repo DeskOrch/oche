@@ -299,3 +299,25 @@ source/AOT sizes were 716.3 KiB/6.623 MiB and 78.1 KiB/6.335 MiB.
 ADR 0005 therefore remains Proposed, with generated direct composition only the
 provisional lead. Detailed semantics, microbenchmark results, build tables, and
 limitations are in `docs/architecture/middleware-execution.md`.
+
+## Phase 1D shared-kernel results
+
+Phase 1D adds Candidate C, a shared closure-free entry/exit kernel around the
+direct typed handler call. Raw JSON remains local and ignored by Git.
+
+The ten-repetition d1/c10 repeat measured C at 5,492.26 req/s, 102.05% of Phase
+1B and 100.29% of raw. The prior 96.22% generated result did not reproduce.
+Across the five-repetition production matrix, C d3 was 99.58-100.22% of Phase
+1B. A contemporaneous raw/C comparison put d3 at 99.81%, 102.89%, and 101.75%
+of raw for concurrency 10/100/500. d1/c100 retained one incremental miss at
+95.24% of Phase 1B, but remained 98.90% of raw in the focused ten-trial repeat.
+
+At 1,000 routes/d3, C used 829,694 source bytes, 27,744 lines, a 7,505,408-byte
+AOT executable, and 5.170 seconds observed compile. Generated A used
+1,764,694/54,795/7,929,344/6.822; runtime B used
+817,702/28,747/7,834,624/5.450. C also delivered 5,453.54 req/s, 101.82% of
+Phase 1B and 102.97% of raw in the representative HTTP comparison.
+
+ADR 0005 is Accepted with Candidate C. Full protocol, latency/RSS/CPU tables,
+microbenchmarks, maintainability analysis, and caveats are in
+`docs/architecture/middleware-execution.md`.

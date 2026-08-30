@@ -18,7 +18,7 @@
     "dartVersion": { "type": "string" },
     "entries": {
       "type": "array",
-      "minItems": 27,
+      "minItems": 38,
       "items": {
         "type": "object",
         "required": [

@@ -14,6 +14,9 @@ Future<void> main(List<String> arguments) async {
     'runtime_1': _runRuntime1,
     'runtime_3': _runRuntime3,
     'runtime_5': _runRuntime5,
+    'shared_1': _runShared1,
+    'shared_3': _runShared3,
+    'shared_5': _runShared5,
     'generated_short_circuit_3': _runGeneratedShort3,
     'runtime_short_circuit_3': _runRuntimeShort3,
     'generated_before_after_3': _runGenerated3,
@@ -167,6 +170,67 @@ int _runRuntime1(int calls, int offset) => _runRuntime(calls, offset, _steps1);
 int _runRuntime3(int calls, int offset) => _runRuntime(calls, offset, _steps3);
 
 int _runRuntime5(int calls, int offset) => _runRuntime(calls, offset, _steps5);
+
+int _sharedEnter1(int value) => _before(value, 0);
+
+int _sharedExit1(int value) => _after(value, 0);
+
+int _sharedEnter3(int value) {
+  value = _before(value, 0);
+  value = _before(value, 1);
+  return _before(value, 2);
+}
+
+int _sharedExit3(int value) {
+  value = _after(value, 2);
+  value = _after(value, 1);
+  return _after(value, 0);
+}
+
+int _sharedEnter5(int value) {
+  value = _sharedEnter3(value);
+  value = _before(value, 3);
+  return _before(value, 4);
+}
+
+int _sharedExit5(int value) {
+  value = _after(value, 4);
+  value = _after(value, 3);
+  return _sharedExit3(value);
+}
+
+int _runShared1(int calls, int offset) {
+  var checksum = 0;
+  for (var index = 0; index < calls; index++) {
+    var value = _sharedEnter1((index + offset) & 1023);
+    value = _handler(value);
+    value = _sharedExit1(value);
+    checksum = (checksum + value) & 0x7fffffff;
+  }
+  return checksum;
+}
+
+int _runShared3(int calls, int offset) {
+  var checksum = 0;
+  for (var index = 0; index < calls; index++) {
+    var value = _sharedEnter3((index + offset) & 1023);
+    value = _handler(value);
+    value = _sharedExit3(value);
+    checksum = (checksum + value) & 0x7fffffff;
+  }
+  return checksum;
+}
+
+int _runShared5(int calls, int offset) {
+  var checksum = 0;
+  for (var index = 0; index < calls; index++) {
+    var value = _sharedEnter5((index + offset) & 1023);
+    value = _handler(value);
+    value = _sharedExit5(value);
+    checksum = (checksum + value) & 0x7fffffff;
+  }
+  return checksum;
+}
 
 int _runRuntime(int calls, int offset, List<int> steps) {
   var checksum = 0;
@@ -322,6 +386,7 @@ Map<String, double> _summary(Iterable<double> input) {
     squaredDifferenceSum += difference * difference;
   }
   return {
+    'mean': mean,
     'median': median,
     'minimum': values.first,
     'maximum': values.last,

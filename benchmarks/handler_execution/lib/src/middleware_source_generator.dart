@@ -160,11 +160,15 @@ void _writeSyntheticDispatch(StringBuffer out, int routeCount, int shape) {
     out.writeln("          case 'r${route - 10}':");
     if (shape == 0) {
       out
-        ..writeln("            if (segments[2] != 'literal') break;")
+        ..writeln("            if (segments[2] != 'literal') {")
+        ..writeln('              break;')
+        ..writeln('            }')
         ..writeln('            _syntheticRoute$route(request);');
     } else if (shape == 1) {
       out
-        ..writeln("            if (segments[2] != 'items') break;")
+        ..writeln("            if (segments[2] != 'items') {")
+        ..writeln('              break;')
+        ..writeln('            }')
         ..writeln('            final id = int.tryParse(segments[3]);')
         ..writeln('            if (id == null) {')
         ..writeln("              writeInvalidParameter(request, 'id');")
@@ -174,7 +178,9 @@ void _writeSyntheticDispatch(StringBuffer out, int routeCount, int shape) {
     } else {
       out
         ..writeln("            if (segments[2] != 'items' ||")
-        ..writeln("                segments[4] != 'children') break;")
+        ..writeln("                segments[4] != 'children') {")
+        ..writeln('              break;')
+        ..writeln('            }')
         ..writeln('            final id = int.tryParse(segments[3]);')
         ..writeln('            final childId = int.tryParse(segments[5]);')
         ..writeln('            if (id == null || childId == null) {')
@@ -222,7 +228,7 @@ void _writeAdapters(
   _writeUsersRoute(out, candidate, depth);
   _writeErrorsRoute(out, candidate, depth);
   _writeRequestRoute(out, candidate, depth);
-  _writeAsyncRoute(out, candidate);
+  _writeAsyncRoute(out, candidate, depth);
   _writeMiddlewareRoute(out, candidate, depth);
   _writeOrdersRoute(out, candidate, depth);
   _writeCatalogRoute(out, candidate, depth);
@@ -239,6 +245,8 @@ void _writeAdapters(
     ]) {
       _writeGeneratedAsyncExecutor(out, depth, profile);
     }
+  } else if (candidate == MiddlewareCandidate.shared) {
+    _writeSharedAsyncExecutor(out, depth);
   }
 }
 
@@ -339,7 +347,11 @@ void _writeRequestRoute(
     ..writeln();
 }
 
-void _writeAsyncRoute(StringBuffer out, MiddlewareCandidate candidate) {
+void _writeAsyncRoute(
+  StringBuffer out,
+  MiddlewareCandidate candidate,
+  int depth,
+) {
   out
     ..writeln('void _asyncRoute(HttpRequest request, String kind, int id) {')
     ..writeln("  if (request.method != 'GET') {")
@@ -350,6 +362,7 @@ void _writeAsyncRoute(StringBuffer out, MiddlewareCandidate candidate) {
   _writeAsyncPipelineCall(
     out,
     candidate,
+    depth,
     'middlewareImmediateAsyncHandler(id)',
     MiddlewareProfile.asyncHandlerSyncMiddleware,
     indent: '    ',
@@ -361,6 +374,7 @@ void _writeAsyncRoute(StringBuffer out, MiddlewareCandidate candidate) {
   _writeAsyncPipelineCall(
     out,
     candidate,
+    depth,
     'middlewareImmediateAsyncHandler(id)',
     MiddlewareProfile.asyncMiddleware,
     indent: '    ',
@@ -372,6 +386,7 @@ void _writeAsyncRoute(StringBuffer out, MiddlewareCandidate candidate) {
   _writeAsyncPipelineCall(
     out,
     candidate,
+    depth,
     'middlewareBoundaryAsyncHandler(id)',
     MiddlewareProfile.mixed,
     indent: '    ',
@@ -401,6 +416,7 @@ void _writeMiddlewareRoute(
   _writeAsyncPipelineCall(
     out,
     candidate,
+    depth,
     'middlewareImmediateAsyncHandler(id)',
     MiddlewareProfile.shortAsync,
     indent: '    ',
@@ -412,6 +428,7 @@ void _writeMiddlewareRoute(
   _writeAsyncPipelineCall(
     out,
     candidate,
+    depth,
     'middlewareImmediateAsyncHandler(id)',
     MiddlewareProfile.errorAsync,
     indent: '    ',
@@ -438,25 +455,37 @@ void _writeMiddlewareRoute(
     ..writeln(
       '  final trace = profile == MiddlewareProfile.order '
       '? <String>[] : null;',
-    )
-    ..writeln('  final invocation = switch (profile) {')
-    ..writeln(
-      '    MiddlewareProfile.errorHandler => '
-      '() => middlewareFailingHandler(id),',
-    )
-    ..writeln(
-      '    MiddlewareProfile.stateNone || '
-      'MiddlewareProfile.stateLazy || '
-      'MiddlewareProfile.stateTyped => '
-      '() => executeStateExperiment(id, profile),',
-    )
-    ..writeln('    _ => () => middlewareSyncHandler(id),')
-    ..writeln('  };');
+    );
+  if (candidate == MiddlewareCandidate.runtime) {
+    out
+      ..writeln('  final invocation = switch (profile) {')
+      ..writeln(
+        '    MiddlewareProfile.errorHandler => '
+        '() => middlewareFailingHandler(id),',
+      )
+      ..writeln(
+        '    MiddlewareProfile.stateNone || '
+        'MiddlewareProfile.stateLazy || '
+        'MiddlewareProfile.stateTyped => '
+        '() => executeStateExperiment(id, profile),',
+      )
+      ..writeln('    _ => () => middlewareSyncHandler(id),')
+      ..writeln('  };');
+  }
+  final invocation = candidate == MiddlewareCandidate.runtime
+      ? 'invocation()'
+      : '''switch (profile) {
+    MiddlewareProfile.errorHandler => middlewareFailingHandler(id),
+    MiddlewareProfile.stateNone ||
+    MiddlewareProfile.stateLazy ||
+    MiddlewareProfile.stateTyped => executeStateExperiment(id, profile),
+    _ => middlewareSyncHandler(id),
+  }''';
   _writeSyncPipeline(
     out,
     candidate,
     depth,
-    'invocation()',
+    invocation,
     MiddlewareProfile.syncContinue,
     dynamicProfile: true,
     traceExpression: 'trace',
@@ -603,6 +632,26 @@ void _writeSyncPipeline(
         ..writeln('    writeMiddlewareUnauthorized(request);')
         ..writeln('    return;')
         ..writeln('  }');
+    case MiddlewareCandidate.shared:
+      if (depth > 0) {
+        out
+          ..writeln('  if (!enterSharedSyncPipeline$depth(')
+          ..writeln('    request,')
+          ..writeln('    $profileExpression,')
+          ..writeln('    $traceExpression,')
+          ..writeln('  )) {')
+          ..writeln('    writeMiddlewareUnauthorized(request);')
+          ..writeln('    return;')
+          ..writeln('  }');
+      }
+      if (hasTrace) out.writeln("  $traceExpression?.add('handler');");
+      out.writeln('  final result = $invocation;');
+      if (depth > 0) {
+        out.writeln(
+          '  exitSharedSyncPipeline$depth('
+          'request, $profileExpression, $traceExpression);',
+        );
+      }
   }
   if (hasTrace) {
     out
@@ -619,6 +668,7 @@ void _writeSyncPipeline(
 void _writeAsyncPipelineCall(
   StringBuffer out,
   MiddlewareCandidate candidate,
+  int depth,
   String invocation,
   MiddlewareProfile profile, {
   required String indent,
@@ -646,7 +696,56 @@ void _writeAsyncPipelineCall(
         ..writeln('$indent    () => $invocation,')
         ..writeln('$indent  ),')
         ..writeln('$indent);');
+    case MiddlewareCandidate.shared:
+      out.writeln(
+        '${indent}executeMiddlewareAsyncResponse('
+        'request, _sharedAsyncPipeline(request, id, $profileExpression));',
+      );
   }
+}
+
+void _writeSharedAsyncExecutor(StringBuffer out, int depth) {
+  out
+    ..writeln('Future<String?> _sharedAsyncPipeline(')
+    ..writeln('  HttpRequest request,')
+    ..writeln('  int id,')
+    ..writeln('  MiddlewareProfile profile,')
+    ..writeln(') async {')
+    ..writeln(
+      '  if (profile == MiddlewareProfile.asyncHandlerSyncMiddleware) {',
+    );
+  if (depth > 0) {
+    out
+      ..writeln('    if (!enterSharedSyncPipeline$depth(request, profile)) {')
+      ..writeln('      return null;')
+      ..writeln('    }');
+  }
+  out.writeln('    final result = await middlewareImmediateAsyncHandler(id);');
+  if (depth > 0) {
+    out.writeln('    exitSharedSyncPipeline$depth(request, profile);');
+  }
+  out
+    ..writeln('    return result;')
+    ..writeln('  }');
+  if (depth > 0) {
+    out
+      ..writeln(
+        '  if (!await enterSharedAsyncPipeline(request, $depth, profile)) {',
+      )
+      ..writeln('    return null;')
+      ..writeln('  }');
+  }
+  out
+    ..writeln('  final result = profile == MiddlewareProfile.mixed')
+    ..writeln('      ? await middlewareBoundaryAsyncHandler(id)')
+    ..writeln('      : await middlewareImmediateAsyncHandler(id);');
+  if (depth > 0) {
+    out.writeln('  await exitSharedAsyncPipeline(request, $depth, profile);');
+  }
+  out
+    ..writeln('  return result;')
+    ..writeln('}')
+    ..writeln();
 }
 
 void _writeGeneratedAsyncExecutor(

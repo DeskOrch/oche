@@ -394,16 +394,15 @@ Schemas:
 The contract and current evidence are in
 [`../docs/architecture/handler-execution.md`](../docs/architecture/handler-execution.md).
 
-## Phase 1C middleware execution
+## Phases 1C and 1D middleware execution
 
-Phase 1C retains the accepted tree and specialized handler adapter, then
-compares two private middleware kernels: an unrolled generated direct chain and
-an immutable prebuilt runtime traversal. It covers depths 0/1/3/5/10, sync and
-async continuation, mixed pipelines, short-circuit, exact unwind order, error
-positions, lazy/typed state, and statically known instances. It defines no
-public middleware API.
+Phase 1C compares an unrolled generated direct chain and immutable runtime
+traversal. Phase 1D adds the selected shared closure-free kernel. All retain the
+accepted tree and specialized handler adapter and cover depths 0/1/3/5/10,
+sync/async/mixed continuation, short-circuit, exact unwind, error positions,
+lazy/typed state, and static instances. They define no public middleware API.
 
-Build 27 AOT artifacts and record source/executable hashes, size, lines, and
+Build 38 AOT artifacts and record source/executable hashes, size, lines, and
 compile observations:
 
 ```powershell
@@ -419,16 +418,18 @@ concurrency 10/100/500, 5-second warmup, 30-second measurement, five balanced
 repetitions, and 2-second cooldown):
 
 ```powershell
-./tool/run-phase1c-windows.ps1 -OhaPath C:\path\to\oha.exe
+./tool/run-phase1d-windows.ps1 -OhaPath C:\path\to\oha.exe
 ```
 
 ```sh
-PHASE1C_OHA_PATH=/path/to/oha sh tool/run-phase1c-linux.sh
+PHASE1D_OHA_PATH=/path/to/oha sh tool/run-phase1d-linux.sh
 ```
 
 Workload sets are `sync`, `async`, `short`, `error`, and `state`. A focused
 suite may select one or more names with `--workloads`; singleton endpoint order
-is valid while implementation order remains balanced. AOT runs with the same
+is valid while implementation order remains balanced. `--implementations` can
+select at least two of raw, Phase 1B, generated, runtime, and shared for a
+focused comparison. AOT runs with the same
 `--suite-run-id` validate build/source fingerprints and reuse only matching
 complete trials. Raw JSON, generated source, and native binaries are ignored.
 
@@ -438,7 +439,7 @@ Schemas:
 - [`harness/schema/middleware-execution-microbenchmark.schema.json`](harness/schema/middleware-execution-microbenchmark.schema.json)
 - [`harness/schema/benchmark-result.schema.json`](harness/schema/benchmark-result.schema.json)
 
-The contract, Windows evidence, gate miss, and code-growth trade-off are in
+The accepted contract, Windows evidence, and code-growth decision are in
 [`../docs/architecture/middleware-execution.md`](../docs/architecture/middleware-execution.md).
 
 ## Measurement methodology

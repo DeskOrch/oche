@@ -1,4 +1,4 @@
-/// Internal middleware execution contracts for the Oche Phase 1C experiment.
+/// Internal middleware execution contracts for the Oche Phase 1D experiment.
 library;
 
 import 'dart:async';
@@ -9,7 +9,7 @@ import 'package:handler_execution_benchmark/handler_execution_benchmark.dart';
 
 const middlewareDepths = <int>[0, 1, 3, 5, 10];
 
-enum MiddlewareCandidate { phase1b, generated, runtime }
+enum MiddlewareCandidate { phase1b, generated, runtime, shared }
 
 enum MiddlewareProfile {
   syncContinue,
@@ -326,6 +326,169 @@ bool _isAsyncStep(MiddlewareProfile profile, int index) => switch (profile) {
   _ => false,
 };
 
+/// Closure-free entry to the shared synchronous middleware kernel at depth 1.
+bool enterSharedSyncPipeline1(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) =>
+    generatedMiddlewareBefore(request, 0, profile, trace) ==
+    MiddlewareDecision.proceed;
+
+/// Closure-free exit from the shared synchronous middleware kernel at depth 1.
+void exitSharedSyncPipeline1(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) => generatedMiddlewareAfter(request, 0, profile, trace);
+
+/// Closure-free entry to the shared synchronous middleware kernel at depth 3.
+bool enterSharedSyncPipeline3(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) {
+  if (generatedMiddlewareBefore(request, 0, profile, trace) ==
+      MiddlewareDecision.unauthorized) {
+    return false;
+  }
+  if (generatedMiddlewareBefore(request, 1, profile, trace) ==
+      MiddlewareDecision.unauthorized) {
+    generatedMiddlewareAfter(request, 0, profile, trace);
+    return false;
+  }
+  if (generatedMiddlewareBefore(request, 2, profile, trace) ==
+      MiddlewareDecision.unauthorized) {
+    generatedMiddlewareAfter(request, 1, profile, trace);
+    generatedMiddlewareAfter(request, 0, profile, trace);
+    return false;
+  }
+  return true;
+}
+
+/// Closure-free exit from the shared synchronous middleware kernel at depth 3.
+void exitSharedSyncPipeline3(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) {
+  generatedMiddlewareAfter(request, 2, profile, trace);
+  generatedMiddlewareAfter(request, 1, profile, trace);
+  generatedMiddlewareAfter(request, 0, profile, trace);
+}
+
+/// Closure-free entry to the shared synchronous middleware kernel at depth 5.
+bool enterSharedSyncPipeline5(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) {
+  if (!enterSharedSyncPipeline3(request, profile, trace)) return false;
+  if (generatedMiddlewareBefore(request, 3, profile, trace) ==
+      MiddlewareDecision.unauthorized) {
+    generatedMiddlewareAfter(request, 2, profile, trace);
+    generatedMiddlewareAfter(request, 1, profile, trace);
+    generatedMiddlewareAfter(request, 0, profile, trace);
+    return false;
+  }
+  if (generatedMiddlewareBefore(request, 4, profile, trace) ==
+      MiddlewareDecision.unauthorized) {
+    generatedMiddlewareAfter(request, 3, profile, trace);
+    generatedMiddlewareAfter(request, 2, profile, trace);
+    generatedMiddlewareAfter(request, 1, profile, trace);
+    generatedMiddlewareAfter(request, 0, profile, trace);
+    return false;
+  }
+  return true;
+}
+
+/// Closure-free exit from the shared synchronous middleware kernel at depth 5.
+void exitSharedSyncPipeline5(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) {
+  generatedMiddlewareAfter(request, 4, profile, trace);
+  generatedMiddlewareAfter(request, 3, profile, trace);
+  exitSharedSyncPipeline3(request, profile, trace);
+}
+
+/// Closure-free entry to the shared synchronous middleware kernel at depth 10.
+bool enterSharedSyncPipeline10(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) {
+  if (!enterSharedSyncPipeline5(request, profile, trace)) return false;
+  for (var index = 5; index < 10; index++) {
+    if (generatedMiddlewareBefore(request, index, profile, trace) ==
+        MiddlewareDecision.unauthorized) {
+      for (var entered = index - 1; entered >= 0; entered--) {
+        generatedMiddlewareAfter(request, entered, profile, trace);
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Closure-free exit from the shared synchronous middleware kernel at depth 10.
+void exitSharedSyncPipeline10(
+  HttpRequest request,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) {
+  for (var index = 9; index >= 5; index--) {
+    generatedMiddlewareAfter(request, index, profile, trace);
+  }
+  exitSharedSyncPipeline5(request, profile, trace);
+}
+
+/// Shared async middleware entry. The generated adapter still invokes its typed
+/// handler directly; this kernel receives no handler, closure, or middleware list.
+Future<bool> enterSharedAsyncPipeline(
+  HttpRequest request,
+  int depth,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) async {
+  var entered = 0;
+  for (var index = 0; index < depth; index++) {
+    final decision = _isAsyncStep(profile, index)
+        ? await middlewareBeforeAsync(request, index, profile, trace)
+        : generatedMiddlewareBefore(request, index, profile, trace);
+    if (decision == MiddlewareDecision.unauthorized) {
+      await _exitSharedAsyncPipeline(request, entered, profile, trace);
+      return false;
+    }
+    entered++;
+  }
+  return true;
+}
+
+/// Shared async middleware exit with exact reverse-order unwinding.
+Future<void> exitSharedAsyncPipeline(
+  HttpRequest request,
+  int depth,
+  MiddlewareProfile profile, [
+  List<String>? trace,
+]) => _exitSharedAsyncPipeline(request, depth, profile, trace);
+
+Future<void> _exitSharedAsyncPipeline(
+  HttpRequest request,
+  int entered,
+  MiddlewareProfile profile,
+  List<String>? trace,
+) async {
+  for (var index = entered - 1; index >= 0; index--) {
+    if (_isAsyncStep(profile, index)) {
+      await middlewareAfterAsync(request, index, profile, trace);
+    } else {
+      generatedMiddlewareAfter(request, index, profile, trace);
+    }
+  }
+}
+
 final class ExperimentalLazyRequestState {
   Map<Object, Object?>? _values;
 
@@ -474,6 +637,7 @@ String middlewareImplementationName(MiddlewareCandidate candidate) =>
       MiddlewareCandidate.phase1b => 'middleware_phase1b',
       MiddlewareCandidate.generated => 'middleware_generated',
       MiddlewareCandidate.runtime => 'middleware_runtime',
+      MiddlewareCandidate.shared => 'middleware_shared',
     };
 
 String middlewareSourceStem(MiddlewareCandidate candidate) =>
@@ -481,4 +645,5 @@ String middlewareSourceStem(MiddlewareCandidate candidate) =>
       MiddlewareCandidate.phase1b => 'phase1b',
       MiddlewareCandidate.generated => 'generated',
       MiddlewareCandidate.runtime => 'runtime',
+      MiddlewareCandidate.shared => 'shared',
     };

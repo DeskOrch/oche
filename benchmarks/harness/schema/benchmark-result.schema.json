@@ -32,7 +32,8 @@
         "middleware_raw",
         "middleware_phase1b",
         "middleware_generated",
-        "middleware_runtime"
+        "middleware_runtime",
+        "middleware_shared"
       ]
     },
     "mode": { "enum": ["jit", "aot"] },
@@ -95,7 +96,7 @@
         "implementationOrder": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 4,
+          "maxItems": 5,
           "uniqueItems": true,
           "items": { "type": "string" }
         },
@@ -107,7 +108,7 @@
         "endpointOrder": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 4,
+          "maxItems": 5,
           "uniqueItems": true,
           "items": { "type": "string" }
         },

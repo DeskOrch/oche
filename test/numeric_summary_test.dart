@@ -8,6 +8,7 @@ void main() {
     expect(summary, isNotNull);
     expect(summary?.sampleCount, 3);
     expect(summary?.minimum, 1);
+    expect(summary?.mean, 3);
     expect(summary?.median, 3);
     expect(summary?.maximum, 5);
     expect(summary?.standardDeviation, closeTo(1.632993, 0.000001));

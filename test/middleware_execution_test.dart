@@ -15,6 +15,11 @@ void main() {
     (MiddlewareCandidate.runtime, 0),
     (MiddlewareCandidate.runtime, 1),
     (MiddlewareCandidate.runtime, 3),
+    (MiddlewareCandidate.shared, 0),
+    (MiddlewareCandidate.shared, 1),
+    (MiddlewareCandidate.shared, 3),
+    (MiddlewareCandidate.shared, 5),
+    (MiddlewareCandidate.shared, 10),
   ];
 
   for (final variant in variants) {
@@ -158,7 +163,7 @@ void main() {
     expect(dispatches.toSet(), hasLength(1));
   });
 
-  test('generated and runtime candidates remain statically typed', () {
+  test('all middleware candidates remain statically typed', () {
     final generated = generateMiddlewareSource(
       MiddlewareCandidate.generated,
       100,
@@ -169,11 +174,17 @@ void main() {
       100,
       3,
     );
+    final shared = generateMiddlewareSource(MiddlewareCandidate.shared, 100, 3);
     expect(generated, contains('middlewareTwoIntHandler(userId, orderId)'));
     expect(generated, contains('generatedMiddlewareBefore'));
     expect(runtime, contains('runtimeMiddlewareSteps'));
     expect(runtime, contains('() => middlewareSyncHandler(id)'));
-    for (final source in [generated, runtime]) {
+    expect(shared, contains('enterSharedSyncPipeline3'));
+    expect(shared, contains('middlewareTwoIntHandler(userId, orderId)'));
+    expect(shared, contains('middlewareImmediateAsyncHandler(id)'));
+    expect(shared, isNot(contains('() =>')));
+    expect(shared, isNot(contains('runtimeMiddlewareSteps')));
+    for (final source in [generated, runtime, shared]) {
       expect(source, isNot(contains('Function.apply')));
       expect(source, isNot(contains('Map<String, dynamic>')));
       expect(source, isNot(contains('service locator')));

@@ -9,6 +9,10 @@ const _supportPaths = <String>[
   'benchmarks/handler_execution/lib/handler_execution_benchmark.dart',
   'benchmarks/handler_execution/lib/middleware_execution_benchmark.dart',
 ];
+const _responseSupportPaths = <String>[
+  ..._supportPaths,
+  'benchmarks/handler_execution/lib/response_lifecycle_benchmark.dart',
+];
 
 Future<void> main(List<String> arguments) async {
   final options = _BuildOptions.parse(arguments);
@@ -55,6 +59,22 @@ Future<void> main(List<String> arguments) async {
       }
     }
   }
+  final lifecycleSourcePath =
+      '${generatedDirectory.path}/lifecycle_r100_d3.dart';
+  final lifecycleSource = File(lifecycleSourcePath);
+  await lifecycleSource.writeAsString(generateResponseLifecycleSource());
+  await _format(lifecycleSource);
+  entries.add(
+    await _compile(
+      implementation: 'response_lifecycle',
+      routeCount: 100,
+      middlewareDepth: 3,
+      sourcePath: lifecycleSourcePath,
+      outputPath:
+          '${outputDirectory.path}/response_lifecycle_r100_d3${_suffix()}',
+      supportPaths: _responseSupportPaths,
+    ),
+  );
   entries.add(
     await _compile(
       implementation: 'middleware_microbenchmark',

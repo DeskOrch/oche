@@ -33,7 +33,8 @@
         "middleware_phase1b",
         "middleware_generated",
         "middleware_runtime",
-        "middleware_shared"
+        "middleware_shared",
+        "response_lifecycle"
       ]
     },
     "mode": { "enum": ["jit", "aot"] },
@@ -96,7 +97,7 @@
         "implementationOrder": {
           "type": "array",
           "minItems": 2,
-          "maxItems": 5,
+          "maxItems": 6,
           "uniqueItems": true,
           "items": { "type": "string" }
         },

@@ -28,4 +28,7 @@ Future<void> main(List<String> arguments) async {
       }
     }
   }
+  final lifecycle = File('${directory.path}/lifecycle_r100_d3.dart');
+  await lifecycle.writeAsString(generateResponseLifecycleSource());
+  stdout.writeln('Wrote ${lifecycle.path}');
 }

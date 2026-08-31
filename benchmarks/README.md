@@ -402,8 +402,8 @@ accepted tree and specialized handler adapter and cover depths 0/1/3/5/10,
 sync/async/mixed continuation, short-circuit, exact unwind, error positions,
 lazy/typed state, and static instances. They define no public middleware API.
 
-Build 38 AOT artifacts and record source/executable hashes, size, lines, and
-compile observations:
+Build the 38 Phase 1C/1D artifacts plus the focused Phase 1E candidate and
+record source/executable hashes, size, lines, and compile observations:
 
 ```powershell
 ./tool/build-middleware-execution.ps1
@@ -441,6 +441,31 @@ Schemas:
 
 The accepted contract, Windows evidence, and code-growth decision are in
 [`../docs/architecture/middleware-execution.md`](../docs/architecture/middleware-execution.md).
+
+## Phase 1E response and runtime lifecycle
+
+Phase 1E keeps the 100-route/depth-3 shared kernel and changes only response
+ownership and the server boundary. `response_lifecycle` tracks commitment and
+transport completion, provides a narrow stream/detach experiment, and drains
+active requests on shutdown. It remains private benchmark code.
+
+Run the limited AOT protocol for normal sync/async responses (raw, Phase 1D,
+and Phase 1E at concurrency 10/100/500, five balanced repetitions) followed by
+one three-chunk streaming diagnostic:
+
+```powershell
+./tool/run-phase1e-windows.ps1 -OhaPath C:\path\to\oha.exe
+```
+
+```sh
+PHASE1E_OHA_PATH=/path/to/oha sh tool/run-phase1e-linux.sh
+```
+
+The `lifecycle` workload set is intentionally focused. Aggregates include
+`relativeToPhase1DShared` and `relativeToRaw`; raw trials and the focused build
+manifest remain ignored. Commitment, disconnect, shutdown, memory, and Windows
+AOT findings are in
+[`../docs/architecture/response-lifecycle.md`](../docs/architecture/response-lifecycle.md).
 
 ## Measurement methodology
 

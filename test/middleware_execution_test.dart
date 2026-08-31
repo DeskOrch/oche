@@ -151,6 +151,39 @@ void main() {
     );
   }
 
+  test(
+    'generated response-lifecycle candidate preserves the Phase 1D kernel',
+    () async {
+      final source = generateResponseLifecycleSource();
+      expect(source, contains('enterSharedSyncPipeline3'));
+      expect(source, contains('writeLifecycleJsonStringResult'));
+      expect(source, contains('runResponseLifecycleBenchmarkServer'));
+      expect(source, isNot(contains('runHandlerBenchmarkServer(')));
+
+      final server = await _GeneratedMiddlewareServer.startResponseLifecycle();
+      addTearDown(server.close);
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+
+      await _expectJson(client, server.port, 'GET', '/users/42', {'id': 42});
+      await _expectJson(client, server.port, 'GET', '/async/sync/42', {
+        'id': 42,
+      });
+      final short = await _request(
+        client,
+        server.port,
+        'GET',
+        '/middleware/short-sync/42',
+      );
+      expect(short.statusCode, HttpStatus.unauthorized);
+      expect(short.body, '{"error":"unauthorized"}');
+      final stream = await _request(client, server.port, 'GET', '/stream');
+      expect(stream.statusCode, HttpStatus.ok);
+      expect(stream.body, 'chunk 1\nchunk 2\nchunk 3\n');
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
   test('candidates retain an identical segmented dispatch tree', () {
     final sources = [
       for (final candidate in MiddlewareCandidate.values)
@@ -258,6 +291,17 @@ final class _GeneratedMiddlewareServer {
   static Future<_GeneratedMiddlewareServer> start(
     MiddlewareCandidate candidate,
     int depth,
+  ) => _startSource(
+    generateMiddlewareSource(candidate, 10, depth),
+    'oche-middleware-',
+  );
+
+  static Future<_GeneratedMiddlewareServer> startResponseLifecycle() =>
+      _startSource(generateResponseLifecycleSource(), 'oche-lifecycle-');
+
+  static Future<_GeneratedMiddlewareServer> _startSource(
+    String generatedSource,
+    String temporaryPrefix,
   ) async {
     final reservation = await ServerSocket.bind(
       InternetAddress.loopbackIPv4,
@@ -265,9 +309,9 @@ final class _GeneratedMiddlewareServer {
     );
     final port = reservation.port;
     await reservation.close();
-    final directory = await Directory.systemTemp.createTemp('oche-middleware-');
+    final directory = await Directory.systemTemp.createTemp(temporaryPrefix);
     final source = File('${directory.path}/server.dart');
-    await source.writeAsString(generateMiddlewareSource(candidate, 10, depth));
+    await source.writeAsString(generatedSource);
     final process = await Process.start(Platform.resolvedExecutable, [
       '--packages=.dart_tool/package_config.json',
       'run',

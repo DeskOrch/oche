@@ -617,6 +617,7 @@ final class _Configuration {
       'middleware_generated' => 'middleware_generated',
       'middleware_runtime' => 'middleware_runtime',
       'middleware_shared' => 'middleware_shared',
+      'response_lifecycle' => 'response_lifecycle',
       _ => throw FormatException('--implementation is not recognized.'),
     };
     final mode = values['mode'] ?? 'jit';

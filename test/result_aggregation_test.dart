@@ -259,4 +259,61 @@ void main() {
       );
     },
   );
+
+  test('normalizes Phase 1E response lifecycle against Phase 1D', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'oche-lifecycle-relative-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final paths = <String>[];
+    for (final implementation in [
+      'middleware_raw',
+      'middleware_shared',
+      'response_lifecycle',
+    ]) {
+      final file = File('${directory.path}/$implementation.json');
+      await file.writeAsString(
+        jsonEncode({
+          'implementation': implementation,
+          'mode': 'aot',
+          'host': '127.0.0.1',
+          'endpoint': '/users/42',
+          'requestMethod': 'GET',
+          'expectedStatus': 200,
+          'routeCount': 100,
+          'workload': 'single_int_sync',
+          'middlewareDepth': 3,
+          'middlewareProfile': 'sync_continue',
+          'concurrency': 100,
+          'durationSeconds': 30,
+          'warmupSeconds': 5,
+          'loadGenerator': 'oha',
+          'startupMs': 10,
+          'requestsPerSecond': switch (implementation) {
+            'middleware_raw' => 1000,
+            'middleware_shared' => 990,
+            _ => 980,
+          },
+        }),
+      );
+      paths.add(file.path);
+    }
+
+    final aggregate = await aggregateResultFiles(paths);
+    final groups = aggregate['groups'] as List<Map<String, Object>>;
+    final lifecycle = groups.singleWhere(
+      (group) => group['implementation'] == 'response_lifecycle',
+    );
+    final toPhase1D =
+        lifecycle['relativeToPhase1DShared'] as Map<String, Object>;
+    expect(
+      (toPhase1D['requestsPerSecond']! as Map<String, Object>)['percentOfRaw'],
+      closeTo(98.99, 0.01),
+    );
+    final toRaw = lifecycle['relativeToRaw'] as Map<String, Object>;
+    expect(
+      (toRaw['requestsPerSecond']! as Map<String, Object>)['percentOfRaw'],
+      98,
+    );
+  });
 }

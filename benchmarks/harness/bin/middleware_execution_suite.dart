@@ -12,6 +12,10 @@ const _allImplementations = <String>[
   'middleware_runtime',
   'middleware_shared',
 ];
+const _knownImplementations = <String>[
+  ..._allImplementations,
+  'response_lifecycle',
+];
 const _middlewareImplementations = <String>[
   'middleware_generated',
   'middleware_runtime',
@@ -19,6 +23,20 @@ const _middlewareImplementations = <String>[
 ];
 
 const _workloadSets = <String, _WorkloadSet>{
+  'lifecycle': _WorkloadSet(
+    ['middleware_raw', 'middleware_shared', 'response_lifecycle'],
+    [
+      _Workload('single_int_sync', 'GET', '/users/42', 200, 'sync_continue'),
+      _Workload(
+        'async_handler_sync_middleware',
+        'GET',
+        '/async/sync/42',
+        200,
+        'async_handler_sync_middleware',
+      ),
+    ],
+    requiresMiddleware: true,
+  ),
   'sync': _WorkloadSet(_allImplementations, [
     _Workload('literal_sync', 'GET', '/status', 200, 'sync_continue'),
     _Workload('single_int_sync', 'GET', '/users/42', 200, 'sync_continue'),
@@ -180,8 +198,9 @@ Future<void> main(List<String> arguments) async {
         workloads.length *
         implementations.length;
     final suiteRunId = '$timestamp-$setName';
+    final phase = setName == 'lifecycle' ? 'phase1e' : 'phase1d';
     final resultsDirectory = Directory(
-      '${options.resultsDirectory}/phase1d-$suiteRunId',
+      '${options.resultsDirectory}/$phase-$suiteRunId',
     );
     await resultsDirectory.create(recursive: true);
 
@@ -315,7 +334,7 @@ Future<void> main(List<String> arguments) async {
 
     final aggregate = await aggregateResultFiles(trialFiles);
     final aggregateFile = File(
-      '${resultsDirectory.path}/phase1d-$suiteRunId-aggregate.json',
+      '${resultsDirectory.path}/$phase-$suiteRunId-aggregate.json',
     );
     await aggregateFile.writeAsString(
       '${const JsonEncoder.withIndent('  ').convert(aggregate)}\n',
@@ -401,7 +420,7 @@ _BuildEntries _readBuildEntries(_SuiteOptions options) {
   final manifest = File(options.buildManifestPath);
   if (!manifest.existsSync()) {
     throw StateError(
-      'Build manifest not found: ${manifest.path}. Run the Phase 1D build first.',
+      'Build manifest not found: ${manifest.path}. Run the middleware build first.',
     );
   }
   final decoded = jsonDecode(manifest.readAsStringSync());
@@ -415,7 +434,9 @@ _BuildEntries _readBuildEntries(_SuiteOptions options) {
             for (final entry in decoded['entries']! as List<Object?>)
               _BuildEntry.fromJson(entry! as Map<String, Object?>),
           ]
-          .where((entry) => _allImplementations.contains(entry.implementation))
+          .where(
+            (entry) => _knownImplementations.contains(entry.implementation),
+          )
           .toList();
   for (final entry in entries) {
     entry.validate();
@@ -463,6 +484,7 @@ final class _BuildEntries {
         'middleware_generated' => 'generated',
         'middleware_runtime' => 'runtime',
         'middleware_shared' => 'shared',
+        'response_lifecycle' => 'lifecycle',
         _ => null,
       };
       final sourcePath = stem == null
@@ -696,7 +718,7 @@ final class _SuiteOptions {
     if (workloadSets.isEmpty ||
         workloadSets.any((value) => !_workloadSets.containsKey(value))) {
       throw FormatException(
-        '--workload-sets supports sync, async, short, error, and state.',
+        '--workload-sets supports lifecycle, sync, async, short, error, and state.',
       );
     }
     final implementations = (values['implementations'] ?? '')
@@ -707,11 +729,12 @@ final class _SuiteOptions {
     if (implementations.isNotEmpty &&
         (implementations.length < 2 ||
             implementations.any(
-              (implementation) => !_allImplementations.contains(implementation),
+              (implementation) =>
+                  !_knownImplementations.contains(implementation),
             ))) {
       throw FormatException(
         '--implementations needs at least two values drawn from '
-        '${_allImplementations.join(', ')}.',
+        '${_knownImplementations.join(', ')}.',
       );
     }
     final concurrencies = _integerList(

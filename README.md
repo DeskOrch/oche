@@ -36,6 +36,12 @@ generated-like execution cost while materially reducing source and AOT growth.
 The private contract and evidence are documented in
 [docs/architecture/middleware-execution.md](docs/architecture/middleware-execution.md).
 
+Phase 1E defines the internal response ownership, commit/completion, streaming,
+disconnect, startup, and graceful-shutdown contract without introducing a
+public framework API. ADR 0006 accepts the contract after correctness and
+limited Windows AOT validation. Details are in
+[docs/architecture/response-lifecycle.md](docs/architecture/response-lifecycle.md).
+
 ## Repository map
 
 ```text
@@ -44,7 +50,7 @@ benchmarks/raw_dart_io/   Raw dart:io reference server
 benchmarks/relic/         Equivalent Relic reference server
 benchmarks/oche_static/   Direct static-routing experiment
 benchmarks/routing_kernel/ Generated Phase 1A kernel experiment
-benchmarks/handler_execution/ Generated Phase 1B/1C/1D execution experiments
+benchmarks/handler_execution/ Generated Phase 1B/1C/1D/1E runtime experiments
 benchmarks/harness/       Process and load-generator harness
 docs/architecture/        Architectural principles
 docs/adr/                 Architecture decision records

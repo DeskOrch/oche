@@ -39,6 +39,7 @@ const _relativeToTenRoutesMetricDirections = <String, String>{
 
 const _phase1aImplementation = 'handler_phase1a_direct';
 const _phase1bMiddlewareImplementation = 'middleware_phase1b';
+const _phase1dMiddlewareImplementation = 'middleware_shared';
 
 /// Reads raw trial JSON files and returns a grouped aggregate document.
 Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
@@ -109,6 +110,24 @@ Future<Map<String, Object>> aggregateResultFiles(List<String> paths) async {
   for (final entry in aggregateByKey.entries) {
     if (entry.key.implementation == _phase1bMiddlewareImplementation) {
       phase1bByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+  final phase1dByComparison = <String, Map<String, Object>>{};
+  for (final entry in aggregateByKey.entries) {
+    if (entry.key.implementation == _phase1dMiddlewareImplementation) {
+      phase1dByComparison[entry.key.comparisonFingerprint] = entry.value;
+    }
+  }
+  for (final entry in aggregateByKey.entries) {
+    final phase1d = phase1dByComparison[entry.key.comparisonFingerprint];
+    if (phase1d == null) continue;
+    final relative = _relativeMetrics(
+      entry.value,
+      phase1d,
+      _relativeToRawMetricDirections,
+    );
+    if (relative.isNotEmpty) {
+      entry.value['relativeToPhase1DShared'] = relative;
     }
   }
   for (final entry in aggregateByKey.entries) {

@@ -321,3 +321,33 @@ Phase 1B and 102.97% of raw in the representative HTTP comparison.
 ADR 0005 is Accepted with Candidate C. Full protocol, latency/RSS/CPU tables,
 microbenchmarks, maintainability analysis, and caveats are in
 `docs/architecture/middleware-execution.md`.
+
+## Phase 1E response-lifecycle results
+
+The native-Windows run `2026-08-31-final-contract-lifecycle` measured the
+focused 100-route/depth-3 response candidate against raw `dart:io` and the
+accepted Phase 1D shared kernel. It used `oha` 1.16.0, concurrency 10/100/500,
+5-second warmup, 30-second measurement, five balanced repetitions, and
+2-second cooldown (90 successful raw trials).
+
+Phase 1E normal sync throughput was 5,319.46/5,390.84/5,770.51 req/s at
+c10/c100/c500: 99.45%/95.87%/101.45% of Phase 1D and
+97.45%/98.52%/100.59% of raw. Normal async throughput was
+5,418.61/5,442.58/5,685.02 req/s: 100.67%/101.32%/99.42% of Phase 1D and
+98.86%/99.03%/99.94% of raw.
+
+Because sync/c100 was the sole incremental miss and Phase 1D itself reached
+102.77% of raw, a focused ten-repetition repeat measured Phase 1E at 5,467.36
+req/s: 101.55% of Phase 1D and 102.25% of raw. The resolved evidence passes the
+98% incremental and 95% complete-stack budgets while retaining the initial
+miss as benchmark-variance evidence.
+
+Idle RSS was 14.67–14.69 MiB, 0.01–0.02 MiB above Phase 1D. Matrix peak RSS
+ranged from 0.15 MiB below to 0.71 MiB above Phase 1D. The focused
+AOT executable was 6,618,624 bytes, 0.35% above Phase 1D. A separate
+three-chunk streaming run at c10 produced 100% success, 5,260.09 req/s,
+p99 2.927 ms, and 14.67/18.95 MiB idle/peak RSS; it is a correctness/overhead
+diagnostic, not a raw-throughput comparison.
+
+Raw JSON remains ignored. The full contract and qualifications are in
+[`../../docs/architecture/response-lifecycle.md`](../../docs/architecture/response-lifecycle.md).

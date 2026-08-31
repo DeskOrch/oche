@@ -55,6 +55,81 @@ String generateMiddlewareSource(
   return out.toString();
 }
 
+/// Generates the Phase 1E candidate from the accepted Phase 1D shared kernel.
+///
+/// Routing, binding, and middleware specialization remain byte-for-byte the
+/// Phase 1D shape. Only the server boundary and terminal response operations
+/// are substituted, keeping the performance comparison narrowly scoped.
+String generateResponseLifecycleSource({int routeCount = 100, int depth = 3}) {
+  var source = generateMiddlewareSource(
+    MiddlewareCandidate.shared,
+    routeCount,
+    depth,
+  );
+  source = source.replaceFirst(
+    "import 'package:handler_execution_benchmark/"
+        "middleware_execution_benchmark.dart';",
+    "import 'package:handler_execution_benchmark/"
+        "middleware_execution_benchmark.dart';\n"
+        "import 'package:handler_execution_benchmark/"
+        "response_lifecycle_benchmark.dart';",
+  );
+  source = source
+      .replaceFirst(
+        "const generatedCandidate = 'shared';",
+        "const generatedCandidate = 'responseLifecycle';",
+      )
+      .replaceFirst(
+        'runHandlerBenchmarkServer(',
+        'runResponseLifecycleBenchmarkServer(',
+      );
+
+  const responseOperations = <String, String>{
+    'executeMiddlewareAsyncResponse(':
+        'executeLifecycleMiddlewareAsyncResponse(',
+    'writeMiddlewareUnauthorized(': 'writeLifecycleMiddlewareUnauthorized(',
+    'writeMiddlewareOrder(': 'writeLifecycleMiddlewareOrder(',
+    'writeJsonStringResult(': 'writeLifecycleJsonStringResult(',
+    'writeTextResult(': 'writeLifecycleTextResult(',
+    'writeNotFound(': 'writeLifecycleNotFound(',
+    'writeInvalidParameter(': 'writeLifecycleInvalidParameter(',
+    'writeMethodNotAllowed(': 'writeLifecycleMethodNotAllowed(',
+  };
+  for (final replacement in responseOperations.entries) {
+    source = source.replaceAll(replacement.key, replacement.value);
+  }
+
+  source = source.replaceFirst(
+    'void generatedMiddlewareDispatch(HttpRequest request) {',
+    '''void generatedMiddlewareDispatch(HttpRequest request) {
+  if (request.uri.path == '/stream') {
+    _streamRoute(request);
+    return;
+  }''',
+  );
+  return '''$source
+void _streamRoute(HttpRequest request) {
+  if (request.method != 'GET') {
+    writeLifecycleMethodNotAllowed(request, const ['GET']);
+    return;
+  }
+  final stream = transferLifecycleResponseToStream(
+    request,
+    contentType: ContentType.text,
+  );
+  executeLifecycleStreaming(stream, _writeStreamingChunks(stream));
+}
+
+Future<void> _writeStreamingChunks(InternalStreamingResponse stream) async {
+  stream.write('chunk 1\\n');
+  await Future<void>.delayed(Duration.zero);
+  stream.write('chunk 2\\n');
+  await Future<void>.delayed(Duration.zero);
+  stream.write('chunk 3\\n');
+}
+''';
+}
+
 void _writeDispatch(StringBuffer out, int routeCount) {
   out
     ..writeln('void generatedMiddlewareDispatch(HttpRequest request) {')

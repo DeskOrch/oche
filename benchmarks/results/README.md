@@ -89,14 +89,17 @@ The data comes from one loopback developer host, where server and load generator
 contend for the same machine. It supports the relative Windows ranking but not a
 universal absolute throughput claim.
 
-## Linux status
+## Phase 0.6 Linux status
 
-Linux results were not collected. WSL exposed only a stopped, Docker-internal
-`docker-desktop` WSL2 distribution, and the Docker Linux engine was unavailable.
-That is not a usable native-Linux validation host. The exact reproducible Linux
-script is `tool/run-phase06-linux.sh`; the manual GitHub Actions workflow also
-runs the same experiment on Ubuntu and labels its artifacts separately. ADR
-0002 therefore remains Proposed.
+Linux results were not collected during Phase 0.6. WSL exposed only a stopped,
+Docker-internal `docker-desktop` WSL2 distribution, and the Docker Linux engine
+was unavailable. That is not a usable native-Linux validation host. The exact
+reproducible Linux script is `tool/run-phase06-linux.sh`; the manual GitHub
+Actions workflow also runs the same experiment on Ubuntu and labels its
+artifacts separately. The later post-Phase-2A public-application gate produced
+local Ubuntu evidence in `oche-linux-validation.zip` at the repository root;
+[ADR 0002](../../docs/adr/0002-http-foundation.md) records its review and is
+now Accepted.
 
 ## Retained Phase 0.5 route-scaling result
 

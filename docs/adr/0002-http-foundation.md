@@ -1,6 +1,6 @@
 # ADR 0002: HTTP foundation
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-27
 
 ## Context
@@ -132,14 +132,78 @@ tail reliability on this loopback developer host.
 
 ## Linux validation
 
-No usable Linux benchmark host was available. WSL listed only the stopped,
-Docker-internal `docker-desktop` distribution at WSL version 2, and the Docker
-Linux engine was not running. Treating that as native Linux, or fabricating a
-result from it, would violate the environment rule.
+The outstanding Linux gate completed on Ubuntu 26.04.1 LTS with kernel
+7.0.0-30-generic in an x86_64 Hyper-V VM. This was a real Linux guest, not WSL
+or a container. The guest exposed eight logical Intel Xeon E5-2680 v4 CPUs and
+7.248 GiB RAM. It used Dart 3.13.1 stable, `oha` 1.15.0, and loopback
+`127.0.0.1:8080`.
 
-The repository includes an exact Linux AOT script and a manually triggered
-Windows/Ubuntu validation workflow. Until one of those produces retained Linux
-evidence, cross-platform reproduction remains unknown.
+Validation commit `41963e4` has Phase 2A commit `12a9cf8` as its parent. It adds
+only the reproducible validation application, harness, tests, and documentation;
+no framework package changed between those revisions. The Oche candidate was
+the real public annotated application compiled from production-generated code,
+not `oche_static` or another internal spike. Its recorded generated-source
+SHA-256,
+`37e2fa450bc15b060025f3407a2ab4210be81bc90569f7b5a628662c02b2847b`,
+matches the tracked production-generated `application.oche.dart`.
+
+The balanced AOT matrix compared raw `dart:io`, Relic, and public Oche across
+synchronous, asynchronous, and typed-`int` workloads at concurrency 10, 100,
+and 500. Every group used five iterations, a five-second warmup, 30-second
+measurement, and two-second cooldown. All 135 trials completed with a 1.0 HTTP
+success rate, producing 27 five-trial groups.
+
+An independent raw-trial review reproduced the aggregate exactly and retained
+every trial. All nine public-Oche workload/concurrency groups meet the central
+95%-of-raw throughput criterion:
+
+| Measure | Linux result |
+| --- | ---: |
+| Median of the nine group-median Oche/raw ratios | 102.03% |
+| Range of group-median Oche/raw ratios | 100.07-105.20% |
+| Worst group-median result | 100.07% |
+| Range of same-iteration paired-median ratios | 98.44-103.56% |
+| Worst paired diagnostic (`async`, concurrency 500) | 98.44% |
+
+The `async`/500 group illustrates temporal and order noise: its independently
+aggregated median ratio is 105.20%, while the more conservative median of
+same-iteration ratios is 98.44%. Both pass the budget, but the higher value is
+not evidence that Oche is architecturally faster than raw `dart:io`. Within the
+observed noise, the candidates are performance-equivalent for the selected
+foundation decision.
+
+Oche median p99 was 95.44-102.47% of matching raw p99, idle RSS was
+97.00-100.62% of raw, and CPU and startup distributions did not show a
+systematic regression or establish a winner. Peak RSS normally tracked raw.
+The `async`/100 raw and Oche trials crossed two different heap-growth states,
+so that group's bimodal peak RSS must not be used to claim an Oche memory
+advantage. The Oche AOT executable was 6,887,328 bytes versus 6,882,896 bytes
+for raw, an overhead of 4,432 bytes or 0.064%.
+
+The local validation archive `oche-linux-validation.zip` contains 135 per-trial
+JSON files and the aggregate. It is intentionally not versioned and does not
+contain the original `oha` transcripts, console logs, AOT binaries, referenced
+public-build manifest, generated source, or explicit Git revision and
+dirty-worktree metadata. The raw JSON and matching generated-source hash are
+sufficient for this performance decision, but future archives should retain
+those additional provenance artifacts.
+
+This single-VM loopback run validates the absence of a material Linux-specific
+architectural regression; it is not a bare-metal capacity claim. Server and
+load generator shared eight virtual CPUs, Hyper-V host scheduling can influence
+absolute results, five permutations leave candidate position partially
+confounded with iteration, and the loopback topology does not replace a
+separate-host production load test.
+
+### Acceptance criteria
+
+| Criterion | Result | Evidence |
+| --- | --- | --- |
+| At least 95% of raw throughput on every important workload | **PASS** | 9/9 groups pass; worst group median 100.07%, worst paired diagnostic 98.44% |
+| No material tail-latency regression | **PASS** | Median p99 is 95.44-102.47% of raw without a systematic adverse pattern |
+| Remain near raw's resource and AOT-size baseline | **PASS** | Idle RSS and CPU track raw; binary overhead is 0.064%; bimodal peak RSS is retained as a caveat |
+| Independent Linux reproduction | **PASS** | Complete balanced AOT matrix on an Ubuntu Hyper-V guest, with all 135 trials successful |
+| Exercise the production public architecture | **PASS** | Public annotated application, production generated-source hash, and no package changes after `12a9cf8` |
 
 ## Architectural boundary
 
@@ -150,27 +214,25 @@ middleware execution, request binding, response handling, error mapping, and
 application lifecycle. It should delegate protocol behavior to `dart:io` and
 avoid recreating a full HTTP server framework.
 
-## Proposed disposition
+## Decision
 
-Keep this ADR **Proposed** because Linux validation is outstanding. Within the
-available Windows evidence, the recommended direction is a thin Oche runtime
-over `dart:io`: it satisfies the stated 95%-of-raw throughput criterion on every
-important workload, remains at raw's memory and binary-size baseline, and fits
-Oche's compile-time/native-first model. Relic's correctness and maintenance
-benefits remain real, but its measured request-path and footprint costs are too
-large to make it the preferred foundation on this evidence.
+Accept a thin Oche runtime over `dart:io` as the HTTP foundation. Windows and
+Linux independently show that the generated/runtime architecture meets the
+95%-of-raw throughput criterion on every important workload, remains near raw's
+resource and AOT-size baseline, and fits Oche's compile-time/native-first model.
+Linux reproduces the absence of a material architectural regression, so the
+previous cross-platform evidence gap is closed.
 
-Confidence is high for the Windows relative ranking and moderate for the
-architectural recommendation overall. The remaining risks are Linux behavior,
-separate-host load generation, broader route shapes, streaming and backpressure,
-WebSockets, response/error semantics, security edge cases, and the maintenance
-cost of keeping Oche's framework layer thin.
+Relic's correctness and maintenance benefits remain real, but its measured
+request-path and footprint costs do not make it the preferred foundation. This
+decision does not mean reimplementing HTTP from TCP sockets: Dart continues to
+own protocol parsing and connection machinery, while Oche owns the deliberately
+thin framework semantics described above.
 
-The next architectural experiment, after review and only as Phase 1 work,
-should compare two generated static-dispatch kernels for mixed literal and
-parameterized route sets at 10, 100, and 1,000 routes. Keep handlers and
-`dart:io` transport identical; validate precedence, parameter failures, 404,
-405, and response/error mapping; measure AOT end-to-end throughput, p99, RSS,
-and code size against raw dispatch. This would select the internal kernel
-boundary and routing shape without introducing public annotations, dependency
-injection, or other application-framework APIs.
+Confidence is high for the relative ranking and architectural direction within
+the tested Windows and Linux loopback environments. Remaining risks include
+separate-host and bare-metal validation, broader traffic and route shapes,
+streaming and backpressure, WebSockets, security edge cases, allocation
+profiling, and the maintenance cost of keeping the framework layer thin. These
+limits constrain the scope of the evidence but do not require reopening the
+selected HTTP foundation.

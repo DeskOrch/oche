@@ -525,7 +525,8 @@ aggregate retains every raw filename and normalizes throughput, latency,
 startup, RSS, CPU, and binary size against raw `dart:io`. Each trial records
 the distribution, kernel, architecture, CPU, logical CPU count, total RAM,
 Dart and `oha` versions, and `environmentType: Hyper-V VM` where available.
-ADR 0002 remains Proposed until these results are reviewed.
+The reviewed evidence and acceptance caveats are recorded in
+[ADR 0002](../docs/adr/0002-http-foundation.md).
 
 ## Measurement methodology
 

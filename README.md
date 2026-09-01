@@ -42,8 +42,9 @@ balanced scheduler, environment metadata, AOT build commands, repeated-result
 aggregation, route-scaling evidence, and Windows/Linux reproduction scripts are
 documented in [benchmarks/README.md](benchmarks/README.md). The balanced Windows
 results are summarized in
-[benchmarks/results/README.md](benchmarks/results/README.md); Linux validation is
-still outstanding, so the HTTP-foundation ADR remains Proposed.
+[benchmarks/results/README.md](benchmarks/results/README.md). The later public
+Oche Linux validation closed the cross-platform gap, so the
+[HTTP-foundation ADR](docs/adr/0002-http-foundation.md) is now Accepted.
 
 Phase 1A adds two internal generated routing-kernel candidates over the same
 `dart:io` transport: segmented tree dispatch and guarded hash-assisted dispatch.

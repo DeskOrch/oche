@@ -1,8 +1,7 @@
-/// Public library marker for the experimental Oche project.
-///
-/// Framework APIs are intentionally deferred until the Phase 0 performance
-/// evidence has been reviewed.
+/// The experimental public Oche application API.
 library;
 
-/// The current pre-framework package version.
+export 'src/annotations.dart';
+
+/// The current experimental package version.
 const String ocheVersion = '0.0.1';

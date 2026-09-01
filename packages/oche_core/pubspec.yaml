@@ -1,5 +1,5 @@
 name: oche_core
-description: Core package placeholder for the experimental Oche framework.
+description: Internal production runtime used by generated Oche applications.
 version: 0.0.1
 publish_to: none
 resolution: workspace

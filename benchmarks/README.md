@@ -467,6 +467,37 @@ manifest remain ignored. Commitment, disconnect, shutdown, memory, and Windows
 AOT findings are in
 [`../docs/architecture/response-lifecycle.md`](../docs/architecture/response-lifecycle.md).
 
+## Phase 2A public application
+
+Phase 2A benchmarks the generated `examples/hello_oche` application itself,
+not a private router surrogate. The suite builds its native executable, records
+generated source lines/bytes, compile duration and binary size, then measures
+sync and async typed routes at concurrency 10/100/500. Raw JSON, manifests, and
+native binaries remain ignored by Git.
+
+Run the default AOT protocol (five-second warmup, 30-second measurement, five
+repetitions, and two-second cooldown):
+
+```powershell
+./tool/run-phase2a-windows.ps1 -OhaPath C:\path\to\oha.exe
+```
+
+```sh
+OHA_PATH=/path/to/oha sh tool/run-phase2a-linux.sh
+```
+
+If a group falls below a retention target, compare the public, Phase 1E, and
+raw binaries in one balanced run. The focused harness defaults to ten
+interleaved repetitions for sync concurrency 100/500 and async concurrency
+500:
+
+```console
+dart run benchmarks/harness/bin/public_api_focused_comparison.dart --oha=C:\path\to\oha.exe
+```
+
+The accepted Windows evidence, including the focused repeat, is in
+[`../docs/architecture/code-generation.md`](../docs/architecture/code-generation.md).
+
 ## Measurement methodology
 
 - **Requests/second and latency:** `oha --no-tui --output-format json`; p50,

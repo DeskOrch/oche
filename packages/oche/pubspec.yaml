@@ -1,8 +1,11 @@
 name: oche
-description: Public package placeholder for the experimental Oche framework.
+description: Experimental public annotations and bootstrap surface for Oche.
 version: 0.0.1
 publish_to: none
 resolution: workspace
 
 environment:
   sdk: ^3.13.0
+
+dependencies:
+  oche_core: ^0.0.1

@@ -1,5 +1,6 @@
-/// Package boundary reserved for future compile-time Oche tooling.
+/// Production source-generation tooling for Oche.
 library;
 
-/// The current package scaffold version.
+export 'src/generation_error.dart';
+
 const String ocheCodegenVersion = '0.0.1';

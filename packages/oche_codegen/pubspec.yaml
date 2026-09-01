@@ -1,8 +1,14 @@
 name: oche_codegen
-description: Code generation package placeholder for the experimental Oche framework.
+description: Production source generator for experimental Oche applications.
 version: 0.0.1
 publish_to: none
 resolution: workspace
 
 environment:
   sdk: ^3.13.0
+
+dependencies:
+  analyzer: ^14.1.0
+  build: ^4.0.10
+  dart_style: ^3.1.13
+  oche: ^0.0.1

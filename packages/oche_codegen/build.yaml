@@ -1,0 +1,7 @@
+builders:
+  application:
+    import: "package:oche_codegen/builder.dart"
+    builder_factories: ["ocheApplicationBuilder"]
+    build_extensions: {".dart": [".oche.dart"]}
+    auto_apply: dependents
+    build_to: source

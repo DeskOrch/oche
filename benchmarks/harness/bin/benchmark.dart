@@ -618,6 +618,7 @@ final class _Configuration {
       'middleware_runtime' => 'middleware_runtime',
       'middleware_shared' => 'middleware_shared',
       'response_lifecycle' => 'response_lifecycle',
+      'oche_public_phase2a' => 'oche_public_phase2a',
       _ => throw FormatException('--implementation is not recognized.'),
     };
     final mode = values['mode'] ?? 'jit';

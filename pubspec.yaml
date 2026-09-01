@@ -12,6 +12,7 @@ workspace:
   - packages/oche_codegen
   - packages/oche_cli
   - packages/oche_test
+  - examples/hello_oche
   - benchmarks/raw_dart_io
   - benchmarks/relic
   - benchmarks/oche_static
@@ -28,5 +29,10 @@ dependencies:
   routing_kernel_benchmark: ^0.0.1
 
 dev_dependencies:
+  build: ^4.0.10
+  build_test: ^3.5.16
   lints: ^6.0.0
+  oche: ^0.0.1
+  oche_codegen: ^0.0.1
+  oche_core: ^0.0.1
   test: ^1.26.0

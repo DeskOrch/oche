@@ -1,5 +1,6 @@
-/// Package boundary reserved for Oche's future minimal runtime core.
+/// Internal runtime for generated Oche applications.
 library;
 
-/// The current package scaffold version.
+export 'src/runtime.dart';
+
 const String ocheCoreVersion = '0.0.1';

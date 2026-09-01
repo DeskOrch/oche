@@ -56,12 +56,26 @@ final class ErrorController {
       Future<String>.error(StateError('sensitive async detail'));
 }
 
+/// Cross-framework workloads used by the post-Phase-2A Linux validation gate.
+@Controller('/validation')
+final class ValidationController {
+  @Get('/sync')
+  String sync() => 'Hello, World!';
+
+  @Get('/async')
+  Future<String> async() async => 'Hello, World!';
+
+  @Get('/users/{id}')
+  String user(@Path('id') int id) => 'User $id';
+}
+
 @OcheApplication(
   controllers: [
     HelloController,
     UserController,
     AsyncController,
     ErrorController,
+    ValidationController,
   ],
 )
 final class Application {}

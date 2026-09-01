@@ -105,6 +105,21 @@ void main() {
         expect(response.body, isNot(contains('sensitive')));
       }
     });
+
+    test('exposes equivalent Linux validation workloads', () async {
+      expect(
+        await _request(client, port, 'GET', '/validation/sync'),
+        _response(200, 'Hello, World!'),
+      );
+      expect(
+        await _request(client, port, 'GET', '/validation/async'),
+        _response(200, 'Hello, World!'),
+      );
+      expect(
+        await _request(client, port, 'GET', '/validation/users/42'),
+        _response(200, 'User 42'),
+      );
+    });
   });
 }
 

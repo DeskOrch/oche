@@ -34,7 +34,8 @@
         "middleware_generated",
         "middleware_runtime",
         "middleware_shared",
-        "response_lifecycle"
+        "response_lifecycle",
+        "oche_public_phase2a"
       ]
     },
     "mode": { "enum": ["jit", "aot"] },
@@ -69,9 +70,12 @@
         "operatingSystem": { "type": "string" },
         "osVersion": { "type": "string" },
         "architecture": { "type": "string" },
+        "linuxDistribution": { "type": "string" },
+        "kernelVersion": { "type": "string" },
         "dartVersion": { "type": "string" },
         "cpuModel": { "type": "string" },
         "logicalCpuCount": { "type": "integer", "minimum": 1 },
+        "totalMemoryBytes": { "type": "integer", "minimum": 1 },
         "environmentType": { "type": "string" },
         "loadGenerator": { "type": "string" },
         "loadGeneratorVersion": { "type": "string" }

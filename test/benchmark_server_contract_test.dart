@@ -13,12 +13,12 @@ void main() {
   _verifyServerContract('raw dart:io', () async {
     final server = await startRawDartIoBenchmarkServer(port: 0);
     return (port: server.port, close: server.close);
-  });
+  }, supportsLinuxValidation: true);
 
   _verifyServerContract('Relic', () async {
     final server = await startRelicBenchmarkServer(port: 0);
     return (port: server.port, close: server.close);
-  });
+  }, supportsLinuxValidation: true);
 
   _verifyServerContract('Oche static', () async {
     final server = await startOcheStaticBenchmarkServer(port: 0);
@@ -26,7 +26,11 @@ void main() {
   });
 }
 
-void _verifyServerContract(String implementation, _ServerFactory start) {
+void _verifyServerContract(
+  String implementation,
+  _ServerFactory start, {
+  bool supportsLinuxValidation = false,
+}) {
   group(implementation, () {
     late HttpClient client;
     late _StartedServer server;
@@ -99,7 +103,43 @@ void _verifyServerContract(String implementation, _ServerFactory start) {
       expect(response.statusCode, HttpStatus.notFound);
       expect(response.body, 'Not Found');
     });
+
+    if (supportsLinuxValidation) {
+      test('exposes equivalent Linux validation workloads', () async {
+        await _expectValidationResponse(
+          client,
+          server.port,
+          '/validation/sync',
+          'Hello, World!',
+        );
+        await _expectValidationResponse(
+          client,
+          server.port,
+          '/validation/async',
+          'Hello, World!',
+        );
+        await _expectValidationResponse(
+          client,
+          server.port,
+          '/validation/users/42',
+          'User 42',
+        );
+      });
+    }
   });
+}
+
+Future<void> _expectValidationResponse(
+  HttpClient client,
+  int port,
+  String path,
+  String body,
+) async {
+  final response = await _get(client, port, path);
+  expect(response.statusCode, HttpStatus.ok);
+  expect(response.mimeType, ContentType.text.mimeType);
+  expect(response.allow, isEmpty);
+  expect(response.body, body);
 }
 
 Future<({int statusCode, String? mimeType, List<String> allow, String body})>

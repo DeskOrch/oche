@@ -62,12 +62,17 @@ void main() {
           'loadGenerator': 'oha',
           'startupMs': 10,
           'requestsPerSecond': isRaw ? 1000 : 950,
-          'latency': {'p99Ms': isRaw ? 10 : 12},
+          'latency': {
+            'p50Ms': isRaw ? 5 : 6,
+            'p95Ms': isRaw ? 8 : 9,
+            'p99Ms': isRaw ? 10 : 12,
+          },
           'memory': {
             'idleRssMb': isRaw ? 20 : 18,
             'peakLoadRssMb': isRaw ? 30 : 33,
           },
           'binarySizeMb': isRaw ? 6 : 7,
+          'cpuUtilizationPercent': isRaw ? 100 : 105,
           'environment': {
             'operatingSystem': 'linux',
             'environmentType': 'native-linux',
@@ -85,11 +90,19 @@ void main() {
     final relative = staticGroup['relativeToRaw'] as Map<String, Object>;
     final throughput = relative['requestsPerSecond'] as Map<String, Object>;
     final latency = relative['p99Ms'] as Map<String, Object>;
+    final p50 = relative['p50Ms'] as Map<String, Object>;
+    final p95 = relative['p95Ms'] as Map<String, Object>;
+    final startup = relative['startupMs'] as Map<String, Object>;
+    final cpu = relative['cpuUtilizationPercent'] as Map<String, Object>;
 
     expect(throughput['percentOfRaw'], 95);
     expect(throughput['preferredDirection'], 'higherIsBetter');
     expect(latency['percentOfRaw'], 120);
     expect(latency['preferredDirection'], 'lowerIsBetter');
+    expect(p50['percentOfRaw'], 120);
+    expect(p95['percentOfRaw'], 112.5);
+    expect(startup['percentOfRaw'], 100);
+    expect(cpu['percentOfRaw'], 105);
   });
 
   test(

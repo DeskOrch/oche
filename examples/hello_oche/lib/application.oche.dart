@@ -11,6 +11,7 @@ final class ApplicationOche {
   static final _controller1 = i0.UserController();
   static final _controller2 = i0.AsyncController();
   static final _controller3 = i0.ErrorController();
+  static final _controller4 = i0.ValidationController();
 
   static final oche_runtime.OcheDispatch _initializedDispatch =
       _initializeControllers(
@@ -18,9 +19,11 @@ final class ApplicationOche {
         _controller1,
         _controller2,
         _controller3,
+        _controller4,
       );
 
   static oche_runtime.OcheDispatch _initializeControllers(
+    Object? _,
     Object? _,
     Object? _,
     Object? _,
@@ -170,6 +173,33 @@ final class ApplicationOche {
                 ]);
                 return;
             }
+          case 'validation':
+            switch (segments[1]) {
+              case 'async':
+                switch (request.method) {
+                  case 'GET':
+                    oche_runtime.executeStringFuture(
+                      request,
+                      _controller4.async(),
+                    );
+                    return;
+                  default:
+                    oche_runtime.writeMethodNotAllowed(request, const ['GET']);
+                    return;
+                }
+              case 'sync':
+                switch (request.method) {
+                  case 'GET':
+                    final result = _controller4.sync();
+                    oche_runtime.writeString(request, result);
+                    return;
+                  default:
+                    oche_runtime.writeMethodNotAllowed(request, const ['GET']);
+                    return;
+                }
+            }
+            oche_runtime.writeNotFound(request);
+            return;
         }
         oche_runtime.writeNotFound(request);
         return;
@@ -189,6 +219,26 @@ final class ApplicationOche {
                       request,
                       _controller2.immediate(path0),
                     );
+                    return;
+                  default:
+                    oche_runtime.writeMethodNotAllowed(request, const ['GET']);
+                    return;
+                }
+            }
+            oche_runtime.writeNotFound(request);
+            return;
+          case 'validation':
+            switch (segments[1]) {
+              case 'users':
+                switch (request.method) {
+                  case 'GET':
+                    final path0 = int.tryParse(segments[2]);
+                    if (path0 == null) {
+                      oche_runtime.writeInvalidParameter(request, 'id');
+                      return;
+                    }
+                    final result = _controller4.user(path0);
+                    oche_runtime.writeString(request, result);
                     return;
                   default:
                     oche_runtime.writeMethodNotAllowed(request, const ['GET']);

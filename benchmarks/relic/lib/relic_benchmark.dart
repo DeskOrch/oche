@@ -32,6 +32,9 @@ Future<RelicBenchmarkServer> startRelicBenchmarkServer({
     ..get('/plaintext', _plaintext)
     ..get('/json', _json)
     ..get('/users/:id', _user)
+    ..get('/validation/sync', _plaintext)
+    ..get('/validation/async', _validationAsync)
+    ..get('/validation/users/:id', _validationUser)
     ..fallback = _notFound;
 
   final server = await app.serve(
@@ -58,6 +61,23 @@ Response _user(Request request) {
   }
   return Response.ok(
     body: Body.fromString('{"id":$id}', mimeType: MimeType.json),
+  );
+}
+
+Future<Response> _validationAsync(Request request) async => Response.ok(
+  body: Body.fromString(_plaintextBody, mimeType: MimeType.plainText),
+);
+
+Response _validationUser(Request request) {
+  final rawId = request.pathParameters.raw[#id];
+  final id = rawId == null ? null : int.tryParse(rawId);
+  if (id == null) {
+    return Response.badRequest(
+      body: Body.fromString(_invalidIdBody, mimeType: MimeType.json),
+    );
+  }
+  return Response.ok(
+    body: Body.fromString('User $id', mimeType: MimeType.plainText),
   );
 }
 

@@ -498,6 +498,35 @@ dart run benchmarks/harness/bin/public_api_focused_comparison.dart --oha=C:\path
 The accepted Windows evidence, including the focused repeat, is in
 [`../docs/architecture/code-generation.md`](../docs/architecture/code-generation.md).
 
+## Post-Phase-2A Linux validation gate
+
+The Linux gate compares raw `dart:io`, Relic, and the production-generated
+public Oche application. All three expose identical validation paths and
+response shapes for a synchronous handler, an asynchronous handler, and an
+`int`-bound parameterized handler. Oche is generated from annotations with the
+production builder; `oche_static` and the internal kernel spikes are excluded.
+
+On the Ubuntu x86_64 Hyper-V validation VM, run from the repository root:
+
+```sh
+./tool/run-linux-validation.sh
+```
+
+The entry point verifies Linux x86_64, resolves dependencies, regenerates the
+public application from a clean build graph, compiles all three servers to AOT,
+and runs the fixed 10/100/500 concurrency matrix with 5-second warmup,
+30-second measurement, five balanced repetitions, and 2-second cooldown.
+`OHA_PATH`, `RESULTS_DIRECTORY`, and `RUN_ID` may select the executable and
+output location without changing the protocol.
+
+Raw trials and the aggregate are written below
+`benchmarks/results/linux-validation/<run-id>/` and remain ignored by Git. The
+aggregate retains every raw filename and normalizes throughput, latency,
+startup, RSS, CPU, and binary size against raw `dart:io`. Each trial records
+the distribution, kernel, architecture, CPU, logical CPU count, total RAM,
+Dart and `oha` versions, and `environmentType: Hyper-V VM` where available.
+ADR 0002 remains Proposed until these results are reviewed.
+
 ## Measurement methodology
 
 - **Requests/second and latency:** `oha --no-tui --output-format json`; p50,

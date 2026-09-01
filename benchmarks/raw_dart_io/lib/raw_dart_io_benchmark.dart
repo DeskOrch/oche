@@ -83,6 +83,17 @@ void _handleRequest(HttpRequest request) {
         body: _jsonBody,
       );
       return;
+    case '/validation/sync':
+      _writeResponse(
+        request.response,
+        statusCode: HttpStatus.ok,
+        contentType: _plainTextType,
+        body: _plaintextBody,
+      );
+      return;
+    case '/validation/async':
+      unawaited(_writeValidationAsync(request));
+      return;
   }
 
   final segments = request.uri.pathSegments;
@@ -106,6 +117,27 @@ void _handleRequest(HttpRequest request) {
     );
     return;
   }
+  if (segments.length == 3 &&
+      segments[0] == 'validation' &&
+      segments[1] == 'users') {
+    final id = int.tryParse(segments[2]);
+    if (id == null) {
+      _writeResponse(
+        request.response,
+        statusCode: HttpStatus.badRequest,
+        contentType: _jsonType,
+        body: _invalidIdBody,
+      );
+      return;
+    }
+    _writeResponse(
+      request.response,
+      statusCode: HttpStatus.ok,
+      contentType: _plainTextType,
+      body: 'User $id',
+    );
+    return;
+  }
 
   _writeResponse(
     request.response,
@@ -116,10 +148,30 @@ void _handleRequest(HttpRequest request) {
 }
 
 bool _isKnownPath(Uri uri) {
-  if (uri.path == '/plaintext' || uri.path == '/json') return true;
+  if (uri.path == '/plaintext' ||
+      uri.path == '/json' ||
+      uri.path == '/validation/sync' ||
+      uri.path == '/validation/async') {
+    return true;
+  }
   final segments = uri.pathSegments;
-  return segments.length == 2 && segments.first == 'users';
+  return (segments.length == 2 && segments.first == 'users') ||
+      (segments.length == 3 &&
+          segments[0] == 'validation' &&
+          segments[1] == 'users');
 }
+
+Future<void> _writeValidationAsync(HttpRequest request) async {
+  final body = await _validationAsyncBody();
+  _writeResponse(
+    request.response,
+    statusCode: HttpStatus.ok,
+    contentType: _plainTextType,
+    body: body,
+  );
+}
+
+Future<String> _validationAsyncBody() async => _plaintextBody;
 
 void _writeResponse(
   HttpResponse response, {

@@ -11,6 +11,13 @@ Future<Map<String, Object>> collectEnvironmentMetadata({
   String? environmentTypeOverride,
 }) async {
   final cpuModel = await _cpuModel();
+  final linuxDistribution = Platform.isLinux
+      ? await _linuxDistribution()
+      : null;
+  final kernelVersion = Platform.isLinux
+      ? await _readIfAvailable('/proc/sys/kernel/osrelease')
+      : null;
+  final totalMemoryBytes = Platform.isLinux ? await _totalMemoryBytes() : null;
   final loadGeneratorVersion = loadGenerator == 'oha'
       ? await _commandVersion(ohaPath, const ['--version'])
       : null;
@@ -18,14 +25,42 @@ Future<Map<String, Object>> collectEnvironmentMetadata({
     'operatingSystem': Platform.operatingSystem,
     'osVersion': Platform.operatingSystemVersion,
     'architecture': Abi.current().toString(),
+    'linuxDistribution': ?linuxDistribution,
+    'kernelVersion': ?kernelVersion,
     'dartVersion': Platform.version,
     'cpuModel': ?cpuModel,
     'logicalCpuCount': Platform.numberOfProcessors,
+    'totalMemoryBytes': ?totalMemoryBytes,
     'environmentType':
         environmentTypeOverride ?? await _detectEnvironmentType(),
     'loadGenerator': loadGenerator,
     'loadGeneratorVersion': ?loadGeneratorVersion,
   };
+}
+
+Future<String?> _linuxDistribution() async {
+  final osRelease = await _readIfAvailable('/etc/os-release');
+  if (osRelease == null) return null;
+  for (final line in osRelease.split('\n')) {
+    if (!line.startsWith('PRETTY_NAME=')) continue;
+    var value = line.substring('PRETTY_NAME='.length);
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      value = value.substring(1, value.length - 1);
+    }
+    return value.replaceAll(r'\"', '"').replaceAll(r'\\', r'\');
+  }
+  return null;
+}
+
+Future<int?> _totalMemoryBytes() async {
+  final memInfo = await _readIfAvailable('/proc/meminfo');
+  if (memInfo == null) return null;
+  final match = RegExp(
+    r'^MemTotal:\s+(\d+)\s+kB$',
+    multiLine: true,
+  ).firstMatch(memInfo);
+  final kibibytes = int.tryParse(match?.group(1) ?? '');
+  return kibibytes == null ? null : kibibytes * 1024;
 }
 
 Future<String> _detectEnvironmentType() async {

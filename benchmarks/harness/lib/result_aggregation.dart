@@ -23,10 +23,14 @@ const _metricPaths = <String, List<String>>{
 };
 
 const _relativeToRawMetricDirections = <String, String>{
+  'startupMs': 'lowerIsBetter',
   'requestsPerSecond': 'higherIsBetter',
+  'p50Ms': 'lowerIsBetter',
+  'p95Ms': 'lowerIsBetter',
   'p99Ms': 'lowerIsBetter',
   'idleRssMb': 'lowerIsBetter',
   'peakLoadRssMb': 'lowerIsBetter',
+  'cpuUtilizationPercent': 'lowerIsBetter',
   'binarySizeMb': 'lowerIsBetter',
 };
 

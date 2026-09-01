@@ -118,6 +118,9 @@ The Phase 2A public example was generated, compiled, and measured on native
 Windows build 26200, an Intel Xeon E5-2680 v4, Dart 3.13.1, and `oha`
 1.16.0. Each primary group used a five-second warmup, 30-second measurement,
 five repetitions, and a two-second cooldown. All requests succeeded.
+These artifact-size observations describe the Phase 2A completion commit
+`12a9cf8`; the later Linux validation gate adds validation-only public routes
+and records the resulting source and binary sizes in its own raw trials.
 
 | Workload | Concurrency | Requests/s | p99 (ms) | Idle RSS (MiB) | Peak RSS (MiB) | Startup (ms) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
